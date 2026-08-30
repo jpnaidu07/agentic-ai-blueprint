@@ -134,7 +134,30 @@ async def mcp_call(request: Request):
     res = MCPServer.call_tool(tool_name, arguments)
     return res
 
+from src.connectors.slack_discord_connector import SlackDiscordConnector, SlackCommandRequest, DiscordWebhookPayload
+
+@app.post("/api/integrations/slack/events")
+async def slack_slash_command(request: Request):
+    """Handles incoming Slack slash commands (e.g. /triage SV-10492, /patch CL-PROD-01)."""
+    form_data = await request.form()
+    cmd_req = SlackCommandRequest(
+        command=form_data.get("command", "/triage"),
+        text=form_data.get("text", "SV-10492"),
+        user_name=form_data.get("user_name", "operator"),
+        channel_id=form_data.get("channel_id", "C01234567")
+    )
+    return SlackDiscordConnector.handle_slack_slash_command(cmd_req)
+
+@app.post("/api/integrations/discord/webhook")
+async def discord_webhook(payload: DiscordWebhookPayload):
+    """Simulates sending an alert to a Discord operational webhook."""
+    return SlackDiscordConnector.format_discord_notification(
+        title="Fleet Telemetry Alert",
+        description=payload.content
+    )
+
 if __name__ == "__main__":
     import uvicorn
     print("🚀 Starting Enterprise Agentic AI Platform on http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

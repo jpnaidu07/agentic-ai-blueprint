@@ -67,8 +67,23 @@ MCP_TOOLS_MANIFEST = [
             },
             "required": ["incident_id"]
         }
+    },
+    {
+        "name": "invoke_subagent",
+        "description": "AI Agent as a Tool: Delegates execution to a specialized domain sub-agent.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target_agent": {"type": "string", "enum": ["StorageTriageAgent", "PatchRolloutAgent", "LogRCAAgent"]},
+                "action": {"type": "string"},
+                "arguments": {"type": "object"}
+            },
+            "required": ["target_agent", "action"]
+        }
     }
 ]
+
+from src.agent.agent2agent import tool_invoke_subagent
 
 TOOL_HANDLERS = {
     "redfish_query_storage": lambda args: tool_redfish_query_storage(args.get("server_id", "")),
@@ -84,8 +99,14 @@ TOOL_HANDLERS = {
     "dry_run_validation": lambda args: tool_dry_run_validation(args.get("cluster_id", "")),
     "correlate_logs": lambda args: tool_correlate_logs(args.get("incident_id", "")),
     "search_incident_kb": lambda args: tool_search_incident_kb(args.get("query", "")),
-    "synthesize_rca_report": lambda args: tool_synthesize_rca_report(args.get("incident_id", ""))
+    "synthesize_rca_report": lambda args: tool_synthesize_rca_report(args.get("incident_id", "")),
+    "invoke_subagent": lambda args: tool_invoke_subagent(
+        target_agent=args.get("target_agent", "StorageTriageAgent"),
+        action=args.get("action", "triage"),
+        arguments=args.get("arguments", {})
+    )
 }
+
 
 class MCPServer:
     @staticmethod

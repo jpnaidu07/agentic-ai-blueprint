@@ -5,6 +5,7 @@ Multi-Tier Memory Implementation:
 3. Structured Persistent Store (SQLite audit log & idempotency registry)
 """
 
+import os
 import sqlite3
 import json
 import time
@@ -129,3 +130,33 @@ class StructuredAuditMemory:
         """, (idempotency_key, resource_id, action_type, json.dumps(response)))
         conn.commit()
         conn.close()
+
+
+class FileStorageMemory:
+    """File-system persistent memory for rollback manifests, patch plans, and generated artifacts."""
+    def __init__(self, base_dir: str = "./storage"):
+        self.base_dir = base_dir
+        self.manifest_dir = os.path.join(base_dir, "manifests")
+        self.reports_dir = os.path.join(base_dir, "reports")
+        os.makedirs(self.manifest_dir, exist_ok=True)
+        os.makedirs(self.reports_dir, exist_ok=True)
+
+    def save_manifest(self, manifest_id: str, data: Dict[str, Any]) -> str:
+        path = os.path.join(self.manifest_dir, f"{manifest_id}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        return path
+
+    def load_manifest(self, manifest_id: str) -> Optional[Dict[str, Any]]:
+        path = os.path.join(self.manifest_dir, f"{manifest_id}.json")
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return None
+
+    def save_report(self, report_id: str, content: str) -> str:
+        path = os.path.join(self.reports_dir, f"{report_id}.md")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return path
+

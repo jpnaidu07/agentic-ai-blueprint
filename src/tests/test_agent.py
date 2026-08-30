@@ -79,10 +79,43 @@ def test_idempotent_ticketing():
 
 def test_mcp_server():
     tools = MCPServer.list_tools()
-    assert len(tools) >= 5
+    assert len(tools) >= 6
     tool_names = [t["name"] for t in tools]
     assert "redfish_query_storage" in tool_names
+    assert "invoke_subagent" in tool_names
 
     res = MCPServer.call_tool("redfish_query_storage", {"server_id": "SV-10492"})
     assert "drives" in res
     assert res["critical_drives_count"] >= 1
+
+def test_file_storage_memory(tmp_path):
+    from src.agent.memory import FileStorageMemory
+    storage = FileStorageMemory(base_dir=str(tmp_path))
+    manifest_path = storage.save_manifest("test-manifest-01", {"cluster": "CL-PROD-01", "stage": 1})
+    assert os.path.exists(manifest_path)
+
+    loaded = storage.load_manifest("test-manifest-01")
+    assert loaded["cluster"] == "CL-PROD-01"
+
+def test_agent_as_a_tool_delegation():
+    from src.agent.agent2agent import tool_invoke_subagent
+    delegated_res = tool_invoke_subagent(
+        target_agent="StorageTriageAgent",
+        action="triage",
+        arguments={"server_id": "SV-10492"}
+    )
+    assert delegated_res["status"] == "COMPLETED"
+    assert "INC-" in delegated_res["result"]["final_synthesis"]
+
+def test_slack_discord_connector():
+    from src.connectors.slack_discord_connector import SlackDiscordConnector, SlackCommandRequest
+    req = SlackCommandRequest(
+        command="/triage",
+        text="SV-10492",
+        user_name="oncall_sre",
+        channel_id="C99999"
+    )
+    slack_resp = SlackDiscordConnector.handle_slack_slash_command(req)
+    assert "blocks" in slack_resp
+    assert "Agentic AI Execution Result" in slack_resp["text"]
+
