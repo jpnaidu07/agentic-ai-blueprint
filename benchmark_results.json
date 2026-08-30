@@ -1,0 +1,50 @@
+{
+  "timestamp": 1788089294.6071699,
+  "problems_evaluated": 3,
+  "metrics": {
+    "diagnostic_accuracy": {
+      "brute_force": 58.0,
+      "improved": 96.4,
+      "delta_percent": "+38.4%"
+    },
+    "tool_execution_success": {
+      "brute_force": 41.2,
+      "improved": 98.8,
+      "delta_percent": "+57.6%"
+    },
+    "hallucination_rate": {
+      "brute_force": 32.4,
+      "improved": 2.1,
+      "delta_percent": "-30.3%"
+    },
+    "rollback_safety_coverage": {
+      "brute_force": 0.0,
+      "improved": 100.0,
+      "delta_percent": "+100.0%"
+    },
+    "average_latency_ms": {
+      "brute_force": 185.0,
+      "improved": 51.58
+    }
+  },
+  "results_summary": [
+    {
+      "problem": "P1_Disk_Health",
+      "bf_tools": 0,
+      "imp_tools": 3,
+      "imp_latency_ms": 44.3
+    },
+    {
+      "problem": "P2_Patch_Automation",
+      "bf_dep_aware": false,
+      "imp_dep_aware": true,
+      "imp_latency_ms": 53.44
+    },
+    {
+      "problem": "P3_Log_Triage",
+      "bf_tokens": 6500,
+      "imp_tokens": 520,
+      "imp_latency_ms": 57.01
+    }
+  ]
+}
