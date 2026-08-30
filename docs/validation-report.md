@@ -6,11 +6,11 @@ Scope: local checkout before commit and push
 
 ## Local developer workbench validation (version 0.4)
 
-- Full suite: **92 passed, 1 skipped** in 43.04 seconds. The skip is the explicitly
+- Full suite: **93 passed, 1 skipped** in 58.15 seconds. The skip is the explicitly
   enabled Docker test; Docker is absent on this laptop. The upstream TestClient
   deprecation warning remains.
 - Ruff lint/format, JavaScript and PowerShell syntax, 10/10 offline evaluations,
-  runtime dependency audit and the 140-file repository validator passed. The editable
+  runtime dependency audit and the 142-file repository validator passed. The editable
   0.4.0 package installed successfully and its workbench entrypoint was exercised.
 - Twenty-five workbench tests cover pairing, Host/Origin/client-IP/CSRF boundaries,
   no cookie authentication, request limits, memory-only keys, all three provider
@@ -27,11 +27,14 @@ Scope: local checkout before commit and push
 - The machine reported Core Ultra 9 285H, 31.4 GiB RAM and Intel Arc 140T graphics.
   No local model was installed, downloaded or benchmarked. GPU acceleration remains
   unverified; model-fit numbers are explicitly estimates.
-- CI now builds the generated-code runner and runs a real container test covering
+- [CI for implementation commit 014e37b](https://github.com/jpnaidu07/agentic-ai-blueprint/actions/runs/33323784110)
+  passed all four jobs: Python 3.11, Python 3.12, Compose and the workbench runner.
+  The runner was built and exercised in a real container test covering
   non-root identity, readonly source/root, absent keys/socket, blocked test-network
   access, preview health/loopback binding/resource configuration, stale-source
-  rejection and managed container cleanup. Its result must be read from the current
-  GitHub Actions run; this was not exercised locally.
+  rejection and managed container cleanup. The preview relay was reachable while
+  generated-app external network access remained blocked. Docker was exercised in
+  CI, not on this laptop.
 - Bash is not installed locally; CI checks the Bash launcher's syntax. No live
   provider request, arbitrary-problem software quality, mobile/full accessibility
   audit or production deployment certification is claimed. After restarting the
