@@ -430,8 +430,6 @@ class Runtime:
             "--detach",
             "--network",
             network,
-            "--publish",
-            f"127.0.0.1:{port}:8000",
             "--tmpfs",
             "/data:rw,noexec,nosuid,size=256m,mode=1777",
             IMAGE,
@@ -445,9 +443,64 @@ class Runtime:
             "8000",
             "--no-access-log",
         ]
-        self.apps[solution] = {"kind": "container", "name": name, "url": f"http://127.0.0.1:{port}"}
+        proxy = f"blueprint-proxy-{self.owner}-{solution}"
+        self.apps[solution] = {
+            "kind": "container",
+            "name": name,
+            "proxy_name": proxy,
+            "url": f"http://127.0.0.1:{port}",
+        }
         try:
             started = command(args, timeout=20).returncode == 0
+            if started:
+                # Docker does not publish ports from internal-only networks. A trusted
+                # relay joins both networks; generated code remains internal-only.
+                # Never mount generated source or set PYTHONPATH=/app on the relay.
+                started = (
+                    command(
+                        [
+                            docker,
+                            "run",
+                            "--detach",
+                            "--name",
+                            proxy,
+                            "--network",
+                            "bridge",
+                            "--publish",
+                            f"127.0.0.1:{port}:8080",
+                            "--cap-drop",
+                            "ALL",
+                            "--security-opt",
+                            "no-new-privileges",
+                            "--read-only",
+                            "--user",
+                            "65534:65534",
+                            "--memory",
+                            "256m",
+                            "--cpus",
+                            "1",
+                            "--pids-limit",
+                            "64",
+                            "--tmpfs",
+                            "/tmp:rw,noexec,nosuid,size=32m",
+                            "--env",
+                            f"UPSTREAM_HOST={name}",
+                            "--env",
+                            "PYTHONPATH=/opt",
+                            IMAGE,
+                            "python",
+                            "-I",
+                            "/opt/blueprint-preview-proxy.py",
+                        ],
+                        timeout=20,
+                    ).returncode
+                    == 0
+                )
+            if started:
+                started = (
+                    command([docker, "network", "connect", network, proxy], timeout=15).returncode
+                    == 0
+                )
         except (OSError, subprocess.TimeoutExpired):
             self.stop(solution)
             raise WorkbenchError(
@@ -484,10 +537,14 @@ class Runtime:
         if not docker:
             return False
         try:
-            result = command(
-                [docker, "inspect", "--format", "{{.State.Running}}", app["name"]], timeout=5
-            )
-            return result.returncode == 0 and result.stdout.strip() == "true"
+            for name in (app["name"], app.get("proxy_name")):
+                if name:
+                    result = command(
+                        [docker, "inspect", "--format", "{{.State.Running}}", name], timeout=5
+                    )
+                    if result.returncode != 0 or result.stdout.strip() != "true":
+                        return False
+            return True
         except (OSError, subprocess.TimeoutExpired):
             return False
 
@@ -502,6 +559,11 @@ class Runtime:
                 except subprocess.TimeoutExpired:
                     process.kill()
         elif app:
+            if app.get("proxy_name"):
+                command(
+                    [executable("docker") or "docker", "rm", "--force", app["proxy_name"]],
+                    timeout=15,
+                )
             command([executable("docker") or "docker", "rm", "--force", app["name"]], timeout=15)
 
     def close(self):

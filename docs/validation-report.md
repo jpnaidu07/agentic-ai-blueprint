@@ -42,6 +42,13 @@ The v0.3 CLI-only observations below are historical. Version 0.4 adds actual
 model-backed generation in the workbench, limited to a solution-local Python runtime;
 the CLI still prepares plans and the existing tender shared source stays protected.
 
+The first workbench CI run passed both Python matrices and the original Compose
+application, but exposed Docker's internal-network port-publishing behavior: isolated
+tests passed, while the preview URL could not be reached. A separate bounded,
+trusted HTTP relay now publishes the URL without giving generated code an external
+network. Regression checks cover fixed destinations, denied CONNECT, header filtering,
+payload limits, absent source mounts and blocked generated-app egress.
+
 ## Guided workflow validation (version 0.3)
 
 - Full suite: **65 passed** in 31.82 seconds; the same upstream TestClient

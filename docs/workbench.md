@@ -164,8 +164,18 @@ digests, so editing the runtime after verification blocks launch. Agent-authored
 tests are not independent proof of business completeness. Deployment never gets
 an automatic production-completion receipt.
 
-Generated previews run on an internal Docker network with a loopback-only published
-port, no keys and temporary `/data` storage. Restart loses that preview data.
+Generated previews run on an internal Docker network with no published ports,
+no keys and temporary `/data` storage. Restart loses that preview data. A separate
+trusted HTTP relay publishes a loopback-only URL and forwards only to that exact
+preview container. It has no generated-source mount, provider keys, CONNECT method,
+arbitrary upstream URL or redirect following. Its additional budget is 256 MiB,
+one CPU and 64 processes; HTTP bodies are limited to 16 MiB. Streaming/WebSockets
+are not supported by this first preview relay.
+
+The relay is needed because
+[Docker internal-only networks do not reliably publish host ports](https://github.com/moby/moby/issues/36174).
+It joins the regular bridge and the internal network; the generated app remains
+internal-only. CI checks both the working URL and blocked app egress.
 [Docker internal networks](https://docs.docker.com/reference/cli/docker/network/create/#internal)
 restrict external connectivity but are not a substitute for host firewalling and
 VM-level isolation. Persistent production storage and external integrations need

@@ -30,7 +30,9 @@ Model-generated writes stay under the selected solution's runtime directory.
 There is no arbitrary host shell or model-selected package installer. Generated
 tests/previews run only in a restricted Docker container without model keys,
 repository/home mounts or the Docker socket. Tests have no network; previews use
-an internal network and a loopback-published port. Docker is not a complete defense
+an internal-only network behind a separate trusted, fixed-upstream HTTP relay with
+a loopback-published port. The relay has no generated source mount, arbitrary URL
+forwarding or CONNECT support. Docker is not a complete defense
 against hostile code or kernel exploits. Use a disposable VM for untrusted projects.
 Do not expose the workbench through tunnels or public reverse proxies.
 
