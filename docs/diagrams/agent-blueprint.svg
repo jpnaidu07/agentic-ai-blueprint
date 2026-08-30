@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1000" role="img" aria-labelledby="title desc">
+<title id="title">Agentic AI Blueprint: eight engineering modules</title>
+<desc id="desc">Eight modules surround a shared contract boundary. A separate spec-first workflow connects business use cases to capability, design, decomposition, implementation and evaluation.</desc>
+<rect width="1440" height="1000" fill="#f3f5ef"/>
+<style>text{font-family:Segoe UI,Arial,sans-serif}.eyebrow{font-size:13px;letter-spacing:2px;fill:#64805b}.title{font-size:40px;font-weight:700;fill:#17382c}.card-title{font-size:21px;font-weight:650;fill:#183a2e}.body{font-size:16px;fill:#536858}.number{font-size:17px;fill:white;font-weight:700}.step{font-size:16px;fill:#193c2b;font-weight:600}</style>
+<text x="48" y="49" class="eyebrow">REUSABLE ENGINEERING METHODOLOGY</text>
+<text x="48" y="104" class="title">Agentic AI Blueprint</text>
+<text x="48" y="141" class="body">Start from a business capability. Make decisions explicit. Keep evidence and human authority intact.</text>
+<rect x="48" y="185" width="322" height="235" rx="12" fill="white" stroke="#ced9c8"/>
+<rect x="68" y="208" width="36" height="36" rx="8" fill="#24593f"/>
+<text x="86" y="232" text-anchor="middle" class="number">1</text>
+<text x="68" y="281" class="card-title">Purpose &amp; Scope</text>
+<text x="68" y="323" class="body">Business capability &amp; personas</text>
+<text x="68" y="352" class="body">Constraints, scale &amp; sensitivity</text>
+<text x="68" y="381" class="body">Success and acceptance criteria</text>
+<path d="M 209 420 V 440" stroke="#8caa7a" stroke-width="2"/>
+<rect x="388" y="185" width="322" height="235" rx="12" fill="white" stroke="#ced9c8"/>
+<rect x="408" y="208" width="36" height="36" rx="8" fill="#24593f"/>
+<text x="426" y="232" text-anchor="middle" class="number">2</text>
+<text x="408" y="281" class="card-title">System Prompt Design</text>
+<text x="408" y="323" class="body">Role, policy &amp; output contracts</text>
+<text x="408" y="352" class="body">Untrusted evidence boundaries</text>
+<text x="408" y="381" class="body">Versioning, refusal &amp; escalation</text>
+<path d="M 549 420 V 440" stroke="#8caa7a" stroke-width="2"/>
+<rect x="728" y="185" width="322" height="235" rx="12" fill="white" stroke="#ced9c8"/>
+<rect x="748" y="208" width="36" height="36" rx="8" fill="#24593f"/>
+<text x="766" y="232" text-anchor="middle" class="number">3</text>
+<text x="748" y="281" class="card-title">Choose LLM</text>
+<text x="748" y="323" class="body">Configurable provider &amp; model</text>
+<text x="748" y="352" class="body">Capability, cost &amp; latency fit</text>
+<text x="748" y="381" class="body">Explicit failure and fallback</text>
+<path d="M 889 420 V 440" stroke="#8caa7a" stroke-width="2"/>
+<rect x="1068" y="185" width="322" height="235" rx="12" fill="white" stroke="#ced9c8"/>
+<rect x="1088" y="208" width="36" height="36" rx="8" fill="#24593f"/>
+<text x="1106" y="232" text-anchor="middle" class="number">4</text>
+<text x="1088" y="281" class="card-title">Tools &amp; Integrations</text>
+<text x="1088" y="323" class="body">Typed inputs, outputs &amp; errors</text>
+<text x="1088" y="352" class="body">Authorization, timeout &amp; retries</text>
+<text x="1088" y="381" class="body">APIs, MCP &amp; deterministic tools</text>
+<path d="M 1229 420 V 440" stroke="#8caa7a" stroke-width="2"/>
+<rect x="48" y="512" width="322" height="235" rx="12" fill="white" stroke="#ced9c8"/>
+<rect x="68" y="535" width="36" height="36" rx="8" fill="#24593f"/>
+<text x="86" y="559" text-anchor="middle" class="number">5</text>
+<text x="68" y="608" class="card-title">Memory Systems</text>
+<text x="68" y="650" class="body">Working and episodic context</text>
+<text x="68" y="679" class="body">SQL entities &amp; object storage</text>
+<text x="68" y="708" class="body">Evidence retrieval when justified</text>
+<path d="M 209 492 V 512" stroke="#8caa7a" stroke-width="2"/>
+<rect x="388" y="512" width="322" height="235" rx="12" fill="white" stroke="#ced9c8"/>
+<rect x="408" y="535" width="36" height="36" rx="8" fill="#24593f"/>
+<text x="426" y="559" text-anchor="middle" class="number">6</text>
+<text x="408" y="608" class="card-title">Orchestration</text>
+<text x="408" y="650" class="body">State, routes &amp; dependencies</text>
+<text x="408" y="679" class="body">Idempotency and recovery</text>
+<text x="408" y="708" class="body">Human approval at boundaries</text>
+<path d="M 549 492 V 512" stroke="#8caa7a" stroke-width="2"/>
+<rect x="728" y="512" width="322" height="235" rx="12" fill="white" stroke="#ced9c8"/>
+<rect x="748" y="535" width="36" height="36" rx="8" fill="#24593f"/>
+<text x="766" y="559" text-anchor="middle" class="number">7</text>
+<text x="748" y="608" class="card-title">User Interface</text>
+<text x="748" y="650" class="body">Capability-derived screens</text>
+<text x="748" y="679" class="body">APIs, chat &amp; review workflows</text>
+<text x="748" y="708" class="body">Evidence and operational status</text>
+<path d="M 889 492 V 512" stroke="#8caa7a" stroke-width="2"/>
+<rect x="1068" y="512" width="322" height="235" rx="12" fill="white" stroke="#ced9c8"/>
+<rect x="1088" y="535" width="36" height="36" rx="8" fill="#24593f"/>
+<text x="1106" y="559" text-anchor="middle" class="number">8</text>
+<text x="1088" y="608" class="card-title">Testing &amp; Evaluation</text>
+<text x="1088" y="650" class="body">Unit, integration &amp; security</text>
+<text x="1088" y="679" class="body">Golden data and retrieval quality</text>
+<text x="1088" y="708" class="body">Measured latency, cost &amp; regression</text>
+<path d="M 1229 492 V 512" stroke="#8caa7a" stroke-width="2"/>
+<rect x="48" y="440" width="1342" height="52" rx="8" fill="#1b3c2f"/>
+<text x="719" y="473" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="17" fill="#e5eeda">Shared contracts · resource authorization · evidence provenance · observability</text>
+<text x="48" y="801" class="eyebrow">SPEC-FIRST DELIVERY FLOW</text>
+<rect x="48" y="826" width="204" height="58" rx="6" fill="#e2ecd8"/>
+<text x="150" y="861" text-anchor="middle" class="step">Business use case</text>
+<path d="M 256 855 h 12 m -5 -5 l 5 5 -5 5" fill="none" stroke="#668556" stroke-width="2"/>
+<rect x="274" y="826" width="204" height="58" rx="6" fill="#e2ecd8"/>
+<text x="376" y="861" text-anchor="middle" class="step">Capability spec</text>
+<path d="M 482 855 h 12 m -5 -5 l 5 5 -5 5" fill="none" stroke="#668556" stroke-width="2"/>
+<rect x="500" y="826" width="204" height="58" rx="6" fill="#e2ecd8"/>
+<text x="602" y="861" text-anchor="middle" class="step">Design spec</text>
+<path d="M 708 855 h 12 m -5 -5 l 5 5 -5 5" fill="none" stroke="#668556" stroke-width="2"/>
+<rect x="726" y="826" width="204" height="58" rx="6" fill="#e2ecd8"/>
+<text x="828" y="861" text-anchor="middle" class="step">Decomposition</text>
+<path d="M 934 855 h 12 m -5 -5 l 5 5 -5 5" fill="none" stroke="#668556" stroke-width="2"/>
+<rect x="952" y="826" width="204" height="58" rx="6" fill="#e2ecd8"/>
+<text x="1054" y="861" text-anchor="middle" class="step">Implementation</text>
+<path d="M 1160 855 h 12 m -5 -5 l 5 5 -5 5" fill="none" stroke="#668556" stroke-width="2"/>
+<rect x="1178" y="826" width="204" height="58" rx="6" fill="#e2ecd8"/>
+<text x="1280" y="861" text-anchor="middle" class="step">Tests &amp; evals</text>
+<text x="48" y="925" class="body">First execution produces specifications. Approved skills implement selected work packages. Deployment follows validation.</text>
+<text x="48" y="962" class="eyebrow">BLUEPRINT = METHOD   /   SPECS = SOLUTION DECISIONS   /   SKILLS = PROCESS   /   CODE = IMPLEMENTATION</text>
+</svg>

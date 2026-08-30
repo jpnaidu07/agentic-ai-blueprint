@@ -1,251 +1,207 @@
-# 🧠 Agentic AI Blueprint: Production-Grade Forward Deployed Engineer (FDE) Platform
+# Agentic AI Blueprint
 
-[![CI Pipeline](https://github.com/jpnaidu07/agentic-ai-blueprint/actions/workflows/ci.yml/badge.svg)](https://github.com/jpnaidu07/agentic-ai-blueprint/actions)
+[![CI](https://github.com/jpnaidu07/agentic-ai-blueprint/actions/workflows/ci.yml/badge.svg)](https://github.com/jpnaidu07/agentic-ai-blueprint/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-285943)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Architecture: 8 Core Modules](https://img.shields.io/badge/Architecture-8%20Core%20Modules-emerald.svg)](design.md)
-[![Target Role: FDE / AI Agent Lead](https://img.shields.io/badge/Target-FDE%20%7C%20Frontier%20AI%20Agent-purple.svg)](ROADMAP.md)
 
-> **Architected for Enterprise Infrastructure & Forward Deployed Engineering (FDE)**  
-> Developed by **JayaPrakash Naidu C S** (Principal Software Engineer — Dell OME / Polaris Modernization).  
-> *Demonstrating end-to-end Agentic AI systems: ReAct Planning, Tool Calling & MCP, Multi-Tier Memory, Local ChromaDB RAG, Real-Time Observability, and Automated Evaluation Harnesses.*
+A reusable, spec-first method for turning a business use case into reviewed
+capabilities, architecture and dependency-aware engineering work. The repository
+also includes a runnable **development reference** for government tender evidence
+review. It does not claim production certification or automate procurement awards.
 
----
+![Eight-module Agentic AI Blueprint](docs/diagrams/agent-blueprint.svg)
 
-## 🌟 Executive Summary
+## Why spec first
 
-The **Agentic AI Blueprint** is an open-source, production-grade reference platform designed to bridge the gap between enterprise distributed infrastructure and modern autonomous AI agents. Built with a strict **Two-Stage Pattern** (Brute-Force Baseline vs. Production-Grade Improved Agent), it solves real-world server management, telemetry triage, fleet patch orchestration, and distributed log root cause analysis.
+A model can generate convincing code before requirements, authorization and
+acceptance criteria are understood. This project makes those decisions reviewable:
 
-### System Target Profile & Hardware Optimization
-- **Laptop Ready**: Optimized for **Intel Core Ultra 9 285H, 32GB RAM, Intel Arc 140T GPU (16GB)**.
-- **Local & Hybrid LLM Execution**: Native support for local **Ollama** (`qwen2.5-coder:7b`, `llama3.2:3b`, `phi3.5`), OpenAI-compatible APIs, and a deterministic offline simulation engine.
-- **Privacy & Air-Gap Friendly**: Zero data leakage; runs fully offline on enterprise private clouds or bare-metal edge nodes.
-
----
-
-## 📐 The 8 Core Modules Architecture
-
-Based on the enterprise Agentic Blueprint specification:
-
-```mermaid
-graph TD
-    subgraph "Core Agent Runtime"
-        M1["1. Purpose & Scope\n(Fleet Triage, Patch, RCA)"] --> M2["2. System Prompt & Guardrails\n(Personas, Pydantic Schema)"]
-        M2 --> M3["3. LLM Abstraction Layer\n(Ollama / Qwen / OpenAI / Offline)"]
-        M3 <--> M6["6. Orchestration & Planner\n(ReAct, DAG, Self-Correction)"]
-        M6 <--> M4["4. Tool & MCP Connectors\n(Redfish, Redfish Probes, Jira/ServiceNow)"]
-        M6 <--> M5["5. Multi-Tier Memory\n(Working, Episodic, ChromaDB RAG, SQLite)"]
-    end
-
-    subgraph "Interface & Telemetry"
-        M6 --> M7["7. User Interface & Stream\n(FastAPI SSE, Modern Dark UI, Tracing)"]
-        M6 --> M8["8. Testing & Evaluation\n(Latency, Hallucination, Precision Evals)"]
-    end
+```text
+Business use case
+  → Capability specification        what the system must accomplish
+  → Design specification            how the eight modules satisfy it
+  → Decomposition specification     dependent, testable work packages
+  → Approved engineering skills     selected implementation work
+  → Tests and repeatable evaluations
+  → Deployment gates
 ```
 
-| Module | Core Responsibility | Enterprise Implementation in this Repo |
-| :--- | :--- | :--- |
-| **1. Purpose & Scope** | Use case bounds, constraints, success criteria | [capability.md](capability.md), Enterprise SLAs, safety limits |
-| **2. System Prompt Design** | Roles, structured outputs, security guardrails | `src/agent/prompts.py`, `src/agent/guardrails.py` |
-| **3. Model Selection** | Local/Cloud LLM parameterization | `src/agent/llm_client.py` (Ollama, Qwen 2.5, OpenAI, Mock) |
-| **4. Tools & Integrations** | Redfish REST, MCP protocol, mock OME/Polaris APIs | `src/tools/`, `src/connectors/`, `src/tools/mcp_server.py` |
-| **5. Memory Systems** | Multi-tier working, episodic, vector, and structured DB | `src/agent/memory.py`, `src/rag/vector_store.py` (ChromaDB) |
-| **6. Orchestration** | ReAct planning loops, error recovery, step execution | `src/agent/planner.py`, `src/agent/orchestrator.py` |
-| **7. User Interface** | Real-time thought visualizer, telemetry dashboard, SSE | `src/ui/` (Dark glassmorphism), `src/api/server.py` |
-| **8. Testing & Evals** | Automated accuracy, latency, and hallucination scoring | `src/evals/eval_harness.py`, `src/tests/` |
+The first execution creates three specifications only. It does not hide an
+unbounded coding agent behind a "generate app" command.
 
----
+## Eight modules
 
-## 🎯 3 Enterprise Problem Statements (Two-Stage Pattern)
+| # | Module | Decisions captured |
+|---:|---|---|
+| 1 | Purpose & Scope | Business capability, personas, constraints, sensitivity, success and acceptance |
+| 2 | System Prompt Design | Goals, policy, schemas, untrusted-data boundary, refusal, evidence and versioning |
+| 3 | Choose LLM | Provider/model capability, context, sampling, latency/cost preference and explicit fallback |
+| 4 | Tools & Integrations | Typed contracts, auth, resource boundaries, timeout, retry and errors |
+| 5 | Memory Systems | Working context, relational entities, documents, retrieval and workflow state |
+| 6 | Orchestration | Routes, dependencies, idempotency, recovery, long work and human approval |
+| 7 | User Interface | Capability-derived screens/APIs, evidence and operational states |
+| 8 | Testing & Evaluation | Unit/API/security tests, golden data, retrieval quality, latency and observed usage |
 
-Every problem is implemented with a dual architecture to clearly illustrate the engineering delta:
+## Run it in ten minutes
 
-```
-┌──────────────────────────────────────┐       ┌──────────────────────────────────────┐
-│       Stage 1: Brute-Force           │       │    Stage 2: Production Improved      │
-│  - Raw single-shot prompt            │  ───> │  - ReAct Planner & Tool Dispatcher   │
-│  - Fragile regex & unvalidated JSON  │       │  - ChromaDB RAG over Hardware KB     │
-│  - No idempotency / state tracking   │       │  - Redfish API & Idempotent Tickets  │
-│  - High hallucination rate on edge   │       │  - Self-healing & Rollback Engine    │
-└──────────────────────────────────────┘       └──────────────────────────────────────┘
-```
+Windows container workflow:
 
-### 1. 💽 OME-Style Disk Health & SMART Telemetry Triage
-- **Context**: 100,000 enterprise servers emitting predictive disk failure alerts.
-- **Brute Force**: Filter alert text with simple heuristics and raw LLM completion.
-- **Improved**: Redfish Storage API querying, SMART attribute delta analysis (Attributes 5, 196, 197), ChromaDB RAG over Dell hardware runbooks, automated mock ServiceNow ticket creation with idempotency tokens.
-- **Directory**: [`src/solutions/problem1_disk_health/`](src/solutions/problem1_disk_health/)
-
-### 2. 🛡️ Server Fleet Patch Automation & Safe Rollout Planner
-- **Context**: Zero-downtime firmware & hypervisor upgrade across heterogeneous server clusters.
-- **Brute Force**: Naive sequential bash command generator from a flat CSV.
-- **Improved**: Dependency graph resolver (Chassis → Sled → Hypervisor → VM migration), staged canary rollout (10% → 50% → 100%), pre-flight health gates, automated rollback manifest generation.
-- **Directory**: [`src/solutions/problem2_patch_automation/`](src/solutions/problem2_patch_automation/)
-
-### 3. 🔍 Distributed Log Triage & Root Cause Analysis (RCA)
-- **Context**: Cascading service degradation across OME Polaris microservices, Kafka event bus, and PostgreSQL database locks.
-- **Brute Force**: Full log dump into context window; prone to context overflow and superficial summarization.
-- **Improved**: Semantic window chunking, cross-service correlation, vector similarity search over historical post-mortems, confidence-scored root cause hypothesis, and reproducible test verification script.
-- **Directory**: [`src/solutions/problem3_log_triage/`](src/solutions/problem3_log_triage/)
-
----
-
-## 📊 Benchmark & Evaluation Results
-
-Evaluated across 50 realistic test scenarios using `src/evals/eval_harness.py`:
-
-| Metric | Stage 1 (Brute-Force) | Stage 2 (Production Improved) | Delta / Impact |
-| :--- | :---: | :---: | :---: |
-| **Diagnostic Accuracy** | 58.0% | **96.4%** | **+38.4%** (Eliminated hallucinations via RAG) |
-| **Tool Execution Success** | 41.2% | **98.8%** | **+57.6%** (Pydantic schema validation & retries) |
-| **Rollback Safety Coverage** | 0.0% | **100.0%** | **Deterministic rollback plans generated** |
-| **Average End-to-End Latency** | 4.82s | **1.35s** | **3.5x Faster** (Semantic caching & targeted queries) |
-| **Idempotency Guarantee** | ❌ No | ✅ **Yes** | **Zero duplicate ticketing incidents** |
-
----
-
-## 🚀 Quickstart Guide
-
-### Prerequisites
-- Python 3.11+
-- Node.js 18+ (optional for UI build) or modern web browser
-- Ollama (Optional: `ollama run qwen2.5-coder:7b` or `llama3.2:3b`. If Ollama is not running, the system automatically falls back to deterministic local mock execution).
-
-### 1. Installation & Environment Setup
-```bash
-# Clone the repository
+```powershell
 git clone https://github.com/jpnaidu07/agentic-ai-blueprint.git
 cd agentic-ai-blueprint
-
-# Install Python dependencies
-pip install -r requirements.txt
+./setup.ps1
+./run.ps1
 ```
 
-### 2. Run the Interactive Agent & Web UI
-```bash
-# Launch the FastAPI backend and live UI server
-python -m src.api.server
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Setup checks Git, Docker
+daemon and Compose, creates unique ignored local identities, validates Compose and
+builds the app. It does not install host services or pull a local LLM.
+
+A Python-only route is available:
+
+```powershell
+./setup.ps1 -LocalPython
+./run.ps1 -LocalPython
 ```
-Navigate to **`http://localhost:8000`** in your browser to access the **Interactive Agent Dashboard & Thought Trace Visualizer**.
 
-### 3. Run the Evaluation Suite & Problem Solvers
-```bash
-# Run unit & integration tests
-python -m pytest src/tests/ -v
+See [development setup](docs/setup.md) for Windows/WSL2, Linux/macOS, security,
+identity and resource-limit details.
 
-# Run the comparative evaluation benchmark (Brute Force vs Improved)
+## Use it for another problem
+
+Copy the input contract and replace every example decision with your use case:
+
+```powershell
+Copy-Item templates/use-case.yaml customer-returns.yaml
+# Edit problem, personas, journeys, requirements, rules, risks and acceptance.
+agent-blueprint create customer-returns.yaml
+agent-blueprint validate customer-returns
+```
+
+The result is:
+
+```text
+solutions/customer-returns/
+├── use-case.yaml
+├── capability/
+│   ├── capability.yaml
+│   └── capability-spec.md
+├── design/
+│   ├── architecture.yaml
+│   └── design-spec.md
+└── decomposition/
+    ├── tasks.yaml
+    └── decomposition-spec.md
+```
+
+Review the proposals, resolve open questions, revise technology decisions, refresh
+upstream digests and record local approval. Then request only selected work:
+
+```powershell
+agent-blueprint approve customer-returns --reviewer your-name
+agent-blueprint run customer-returns backend
+agent-blueprint run customer-returns agents
+```
+
+A `run` command creates a dependency-checked engineering packet. A developer or
+coding agent implements it. `agent-blueprint complete` records evidence hashes
+after implementation; stale specs or evidence invalidate downstream work.
+
+The template accepts any business domain that can be expressed through its strict
+use-case schema. It does not infer a complete legal/business policy from one line
+of prose. That would conceal assumptions. Start with the example and keep unknowns
+in `open_questions`.
+
+Reusable skill instructions live under `skills/`. Generated solution decisions
+remain under `solutions/`; neither is embedded into the other.
+
+## Government tender reference
+
+[Government Tender Intelligence & Bid Evaluation](solutions/government-tender-processing/)
+proves the framework against a document-heavy, controlled workflow:
+
+- authenticated admin, evaluator, reviewer and viewer roles with tender scope;
+- bounded digital-PDF validation, page text, chunks and original SHA-256;
+- immutable human-reviewed facts with exact quotes and document/page references;
+- lexical evidence retrieval with a supplied-embedding hybrid extension;
+- mandatory eligibility, Decimal weighted scoring, L1 comparison and equal ties;
+- missing/low-confidence evidence blocks ranking; ineligible bids set no baseline;
+- idempotent, version-bound evaluations and independent stale-safe decisions;
+- append-only facts/decisions and a verifiable per-tender audit hash chain;
+- a responsive portal for portfolios, bidders, documents, scores and audit history.
+
+The model-assisted path produces proposals only. It cannot accept evidence, change
+criteria, calculate policy outside the deterministic engine, approve an evaluation
+or issue an award. Read the [design decisions and limitations](solutions/government-tender-processing/design/architecture-notes.md)
+and [architecture diagrams](solutions/government-tender-processing/design/diagrams/README.md).
+
+## Model providers
+
+The adapter supports OpenAI, Azure OpenAI, Gemini, Anthropic and Ollama compatibility
+endpoints plus explicit OpenAI-compatible bases. Model names, keys, context and
+capability flags come from environment configuration. There is no silent fallback
+from provider failure to mock output; `mock` is an explicit infrastructure demo.
+
+Compatibility does not mean feature equivalence. In particular, Anthropic's
+compatibility layer ignores `response_format`, so tender schema extraction rejects
+that route pending a native adapter. Read [provider contracts](docs/providers.md)
+before enabling `ALLOW_DOCUMENT_LLM`. Cloud and local inference are optional for
+manual fact review, deterministic scoring and offline tests.
+
+## Verification
+
+```powershell
+python -m ruff check src scripts
+python -m ruff format --check src scripts
+python -m pytest -q
 python -m src.evals.eval_harness
+python -m scripts.validate_repo
+python -m pip_audit -r requirements.txt
+docker compose config --quiet
 ```
 
----
+Offline evaluations report actual case counts and measured runtime against the
+versioned synthetic dataset. They do not invent accuracy, hallucination, speed or
+cost claims. The [validation report](docs/validation-report.md) separates local
+evidence from CI and production gaps.
 
-## 🐳 Docker Deployment
+## Existing infrastructure demos
 
-Run the complete multi-service stack with a single command:
+The three earlier examples remain under `src/solutions/`:
 
-```bash
-docker-compose -f infra/docker-compose.yml up --build
-```
-Services started:
-- **FastAPI Agent Runtime & Mock APIs**: `http://localhost:8000`
-- **Modern Dark-Mode Web Dashboard**: `http://localhost:3000`
-- **ChromaDB Local Vector Store**: `http://localhost:8001`
+- disk telemetry triage;
+- canary patch planning;
+- distributed log correlation.
 
----
+They are explicit offline simulations over synthetic fixtures, useful for tool,
+idempotency and orchestration examples. They are not live Dell OME, ServiceNow,
+ChromaDB, Slack, Discord or production benchmark integrations. Simulation routes
+are authenticated and disabled unless `ENABLE_DEMO_ROUTES=true`.
+Their `MCPServer` class is a schema-validated local catalog; no stdio/HTTP MCP
+transport is claimed. A real transport needs an approved tools work package,
+authentication and a resource boundary.
 
-## 📁 Repository Structure
+## Repository map
 
-```
-agentic-ai-blueprint/
-├── README.md                      # Platform overview, architecture, quickstart
-├── ROADMAP.md                     # 12-week & 5-week FDE Career & Technical Roadmap
-├── capability.md                  # Agent capabilities, constraints, safety matrix
-├── design.md                      # 8 Core Modules Architecture & Mermaid diagrams
-├── LICENSE                        # MIT License
-├── requirements.txt               # Production & testing dependencies
-│
-├── components/                    # Modular Architecture Deep-Dives
-│   ├── planner.md                 # ReAct loops, DAG decomposition, self-correction
-│   ├── executor.md                # Tool sandbox, error backoff, idempotency
-│   ├── memory.md                  # Multi-tier memory (Episodic, RAG, SQLite)
-│   ├── tool_connectors.md         # MCP protocol & Redfish REST connectors
-│   ├── ui.md                      # Streaming SSE & Trace Visualizer specs
-│   └── eval_harness.md            # Benchmark methodology & evaluation metrics
-│
-├── problems/                      # Industry Problem Specifications
-│   ├── problem-ome-disk-health.md
-│   ├── problem-server-patch-automation.md
-│   └── problem-log-triage-agent.md
-│
-├── docs/                          # Interview & Engineering Guides
-│   ├── interview-stories.md       # STAR+P interview stories for FDE roles
-│   ├── evaluation.md              # Detailed benchmark data and eval reports
-│   └── fde-playbook.md            # Forward Deployed Engineer Field Manual
-│
-├── infra/                         # Infrastructure as Code
-│   ├── docker-compose.yml         # Local container orchestration
-│   ├── Dockerfile.backend
-│   ├── Dockerfile.frontend
-│   ├── install.ps1                # Windows one-click installer
-│   └── install.sh                 # Linux/macOS one-click installer
-│
-├── src/                           # Production Source Code
-│   ├── agent/                     # Core Agent Orchestration Runtime
-│   │   ├── llm_client.py          # Ollama / OpenAI / Mock LLM Client
-│   │   ├── planner.py             # Task decomposition & step graphs
-│   │   ├── orchestrator.py        # ReAct loop, tool dispatcher & SSE streamer
-│   │   ├── memory.py              # Working scratchpad & episodic buffer
-│   │   ├── guardrails.py          # Input/output safety & schema validators
-│   │   └── prompts.py             # System prompts & few-shot catalogs
-│   │
-│   ├── connectors/                # Enterprise Mock APIs
-│   │   ├── mock_ome_api.py        # Dell OME / Redfish telemetry endpoints
-│   │   └── mock_ticketing_api.py  # Mock ServiceNow/Jira ticketing
-│   │
-│   ├── tools/                     # Agent Tools & MCP Wrappers
-│   │   ├── disk_tools.py          # Redfish disk SMART analyzers
-│   │   ├── patch_tools.py         # Fleet dependency & canary planners
-│   │   ├── log_tools.py           # Log chunkers & anomaly extractors
-│   │   └── mcp_server.py          # Model Context Protocol wrapper
-│   │
-│   ├── rag/                       # Local RAG & Knowledge Base
-│   │   ├── vector_store.py        # ChromaDB & Cosine Similarity engine
-│   │   └── knowledge_base.py      # Dell hardware runbooks & RCA corpus
-│   │
-│   ├── solutions/                 # Dual Solutions (Brute Force vs Improved)
-│   │   ├── problem1_disk_health/
-│   │   ├── problem2_patch_automation/
-│   │   └── problem3_log_triage/
-│   │
-│   ├── api/                       # REST & SSE Backend Server
-│   │   └── server.py              # FastAPI server & trace streamer
-│   │
-│   ├── ui/                        # Web Interface (Glassmorphic Dark Mode)
-│   │   ├── index.html
-│   │   ├── app.js
-│   │   └── style.css
-│   │
-│   ├── evals/                     # Evaluation Framework
-│   │   └── eval_harness.py        # Accuracy, latency & hallucination benchmarks
-│   │
-│   └── tests/                     # Unit & Integration Tests
-│       ├── test_agent.py
-│       └── test_solutions.py
-│
-└── .github/workflows/
-    └── ci.yml                     # Automated CI/CD workflow
+```text
+blueprint/           strict contracts and JSON Schemas
+templates/           reusable use-case input
+skills/              reusable engineering processes
+solutions/           solution-specific specs, reference data and evidence
+src/blueprint/       spec compiler, approval and dependency gates
+src/tender/          runnable tender reference
+src/agent/           provider adapter and bounded legacy simulation
+src/tests/           contract, API, security and concurrency tests
+docs/                setup, providers, findings and blueprint diagram
+scripts/             environment, schemas, validation and SVG generation
+docker-compose.yml   bounded development stack
 ```
 
----
+## Security and scope
 
-## 💼 Forward Deployed Engineer (FDE) Positioning
+Use synthetic data until identity, TLS, encryption, malware scanning, isolated
+document parsing, secrets management, backups, external audit anchoring, rate
+limits, retention/residency, model quality and procurement/legal controls are
+approved and independently tested. See [security policy](SECURITY.md).
 
-This project is tailored for senior/principal engineers demonstrating technical leadership in:
-1. **Bridging Real-World Enterprise Systems**: Connecting legacy enterprise hardware APIs (Dell OME, Redfish, IPMI, SNMP) with frontier Agentic AI workflows.
-2. **Deterministic Reliability in Stochastic Systems**: Enforcing strict Pydantic schemas, dry-run safety gates, and idempotent API actions over non-deterministic LLMs.
-3. **Hardware-Efficient Edge Deployment**: Running high-throughput agent loops on laptop/edge compute with quantized open weights (Qwen 2.5, Llama 3.2).
-
----
-
-## 📄 License
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+Licensed under the [MIT License](LICENSE).
