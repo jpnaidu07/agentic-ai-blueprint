@@ -73,26 +73,33 @@ Copy-Item templates/use-case.yaml my-use-case.yaml
 agent-blueprint create my-use-case.yaml
 agent-blueprint validate service-request-routing
 agent-blueprint approve service-request-routing --reviewer your-name
-agent-blueprint run service-request-routing backend
+agent-blueprint run service-request-routing next
+# Or prepare all tasks: agent-blueprint run service-request-routing all
 ```
 
 The first command compiles three proposals, not source code. The input is a
 structured problem statement; free-form prose is not automatically interpreted
 as complete requirements. Review technology choices and fill gaps before approval.
-The `run` command produces a selected skill packet for a developer/coding agent.
+The `run` command produces a selected teaching/execution plan for a developer/coding agent.
 It does not launch a hidden agent, run arbitrary YAML commands, or claim work was
 completed. After implementing, record evidence inside the solution:
 
 ```powershell
-agent-blueprint complete service-request-routing TASK-CAP-01 --reviewer your-name --evidence implementation/backend/evidence.md
+agent-blueprint complete service-request-routing TASK-CAP-DATA --reviewer your-name --evidence implementation/database/task-cap-data-evidence.md
+agent-blueprint status service-request-routing
 ```
 
 Completion is a local developer attestation, not cryptographic identity or a CI
 result. Evidence hashes and the complete spec digest invalidate receipts when
 inputs change. Define task dependency IDs in `decomposition/tasks.yaml`; missing
-prerequisites prevent downstream packets and completion. Re-run validation after
+prerequisites mark planned work blocked and prevent downstream completion. Re-run validation after
 editing specs and update upstream digests deliberately using the helper in
 `src.blueprint.specs` only after reviewing the dependent content.
+
+For capability-only creation, staged design/decomposition, database/backend/agent/UI
+tasks, numbered module selection, all-mode execution and lessons at each step,
+follow [the guided workflow](workflow.md). The coding agent executes the selected
+plan; the CLI never claims a generated plan is implemented software.
 
 ## Models and optional local inference
 

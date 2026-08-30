@@ -33,6 +33,7 @@ SPEC_FILES = [
 ]
 SKILLS = [
     "backend",
+    "database",
     "agents",
     "rag",
     "frontend",
@@ -42,6 +43,20 @@ SKILLS = [
     "evals",
     "deployment",
 ]
+STAGES = ["capability", "design", "decomposition"]
+STAGE_FILES = ["capability.yaml", "architecture.yaml", "tasks.yaml"]
+SKILL_MODULES = {
+    "backend": [1, 4, 5],
+    "database": [5],
+    "agents": [2, 3, 4, 6],
+    "rag": [3, 4, 5],
+    "frontend": [7],
+    "infrastructure": [4, 5, 6],
+    "security": [2, 4, 5, 6, 7],
+    "tests": [8],
+    "evals": [8],
+    "deployment": [4, 6, 8],
+}
 
 
 def digest(value):
@@ -80,7 +95,7 @@ def render(title, data):
     return "\n".join(parts)
 
 
-def compile_specs(case: UseCase):
+def compile_specs(case: UseCase, design_override=None):
     capability = case.model_dump()
     decisions = [
         [
@@ -143,6 +158,8 @@ def compile_specs(case: UseCase):
             "Load tests, data retention review and human sign-off",
         ],
     ).model_dump()
+    if design_override is not None:
+        design = design_override
     tasks = []
     for req in case.requirements:
         tasks.append(
@@ -151,15 +168,22 @@ def compile_specs(case: UseCase):
                 parent_capability=req.id,
                 objective=req.objective,
                 skill=req.skill,
-                dependencies=[],
+                dependencies=[f"TASK-{dependency}" for dependency in req.depends_on],
                 inputs=["capability/capability.yaml", "design/architecture.yaml"],
-                outputs=[f"implementation/{req.skill}/{req.id.lower()}.md"],
+                outputs=[
+                    f"implementation/{req.skill}",
+                    f"implementation/{req.skill}/{req.id.lower()}-evidence.md",
+                ],
                 affected_modules=[f"implementation/{req.skill}"],
+                blueprint_modules=req.blueprint_modules or SKILL_MODULES[req.skill],
                 api_contract="Derive request/response and error schemas from this capability; review before coding.",
                 data_contract="Define typed records, relationships, validation and migration from this capability.",
                 agent_tools=["Use only design-approved tools with caller resource scope"],
                 instructions=[
                     req.objective,
+                    "Explain the goal, design choice and success check before implementation; then build and test real code.",
+                    "Use solution-local source unless an existing reference is explicitly mapped. Identify database, service, agent and UI files as applicable.",
+                    "For unavailable credentials or host services, record the exact prerequisite, user action and verification command; do not mark the task complete.",
                     "Record implementation files and validation evidence in the completion receipt.",
                 ],
                 tests=req.acceptance,
@@ -183,6 +207,7 @@ def compile_specs(case: UseCase):
                 inputs=["decomposition/tasks.yaml"],
                 outputs=[f"implementation/{skill}/evidence.md"],
                 affected_modules=[f"implementation/{skill}"],
+                blueprint_modules=SKILL_MODULES[skill],
                 api_contract="Exercise approved API contracts",
                 data_contract="Use synthetic fixtures only",
                 agent_tools=[],
@@ -199,7 +224,9 @@ def compile_specs(case: UseCase):
     return capability, design, decomposition
 
 
-def create(root: Path, input_file: Path):
+def create(root: Path, input_file: Path, through="decomposition"):
+    if through not in STAGES:
+        raise ValueError("Unknown specification stage")
     case = UseCase.model_validate(read_yaml(input_file))
     target = safe_solution(root, case.name)
     if target.exists():
@@ -222,6 +249,8 @@ def create(root: Path, input_file: Path):
                 ("decomposition", "tasks.yaml", "Decomposition"),
             ]
         ):
+            if index > STAGES.index(through):
+                break
             directory = staging / folder
             directory.mkdir()
             (directory / filename).write_text(
@@ -230,23 +259,48 @@ def create(root: Path, input_file: Path):
             (directory / f"{folder}-spec.md").write_text(
                 render(f"{case.title}: {title}", artifacts[index]), encoding="utf-8"
             )
-        validate(staging)
+        validate_progress(staging)
         staging.rename(target)
     return target
 
 
-def validate(path: Path):
+def validate_progress(path: Path):
+    """Validate an intentional prefix of the three-stage specification workflow."""
+    for relative in SPEC_FILES:
+        if (path / relative).exists() and not (path / relative).resolve().is_relative_to(
+            path.resolve()
+        ):
+            raise ValueError("Specification path escapes solution")
     case = UseCase.model_validate(read_yaml(path / "capability/capability.yaml"))
-    design = Design.model_validate(read_yaml(path / "design/architecture.yaml"))
-    decomposition = Decomposition.model_validate(read_yaml(path / "decomposition/tasks.yaml"))
-    if design.solution != case.name or decomposition.solution != case.name:
+    if (
+        not (path / "use-case.yaml").is_file()
+        or not (path / "capability/capability-spec.md").is_file()
+    ):
+        raise ValueError("Missing use-case or capability artifact")
+    # use-case.yaml retains the original brief; capability.yaml is the reviewed authority.
+    UseCase.model_validate(read_yaml(path / "use-case.yaml"))
+    if case.name != path.name:
         raise ValueError("Solution IDs disagree")
+    if not (path / "design").exists():
+        if (path / "decomposition").exists():
+            raise ValueError("Decomposition requires design first")
+        return case, None, None
+    design = Design.model_validate(read_yaml(path / "design/architecture.yaml"))
+    if design.solution != case.name:
+        raise ValueError("Solution IDs disagree")
+    if not (path / "design/design-spec.md").is_file():
+        raise ValueError("Missing design-spec.md")
     if [(m.number, m.name) for m in design.modules] != list(enumerate(MODULES, 1)):
         raise ValueError("Design must contain exactly the eight ordered blueprint modules")
     if design.capability_digest != digest(case.model_dump()):
         raise ValueError(
             "Design is stale relative to capability; revise it and refresh its capability_digest"
         )
+    if not (path / "decomposition").exists():
+        return case, design, None
+    decomposition = Decomposition.model_validate(read_yaml(path / "decomposition/tasks.yaml"))
+    if decomposition.solution != case.name:
+        raise ValueError("Solution IDs disagree")
     if decomposition.design_digest != digest(design.model_dump()):
         raise ValueError(
             "Decomposition is stale relative to design; revise it and refresh its design_digest"
@@ -271,6 +325,44 @@ def validate(path: Path):
         if not (path / relative).is_file():
             raise ValueError(f"Missing artifact: {relative}")
     return case, design, decomposition
+
+
+def validate(path: Path):
+    result = validate_progress(path)
+    if result[2] is None:
+        raise ValueError("Complete capability, design and decomposition before implementation")
+    return result
+
+
+def advance(path: Path, stage: str):
+    """Add the next stage without overwriting reviewed specifications or implementation."""
+    if stage not in {"design", "decomposition", "all"}:
+        raise ValueError("Use create for capability; spec accepts design, decomposition or all")
+    case, design, decomposition = validate_progress(path)
+    if stage == "all":
+        if design is None:
+            advance(path, "design")
+        if decomposition is None:
+            advance(path, "decomposition")
+        return path
+    if (path / stage).exists():
+        raise ValueError(f"{stage} already exists; review/edit it, never overwrite it")
+    if stage == "decomposition" and design is None:
+        raise ValueError("Generate and review design before decomposition")
+    index = STAGES.index(stage)
+    data = compile_specs(case, design.model_dump() if design else None)[index]
+    with tempfile.TemporaryDirectory(prefix=".spec-", dir=path) as temp:
+        directory = Path(temp) / stage
+        directory.mkdir()
+        (directory / STAGE_FILES[index]).write_text(
+            yaml.safe_dump(data, sort_keys=False), encoding="utf-8"
+        )
+        (directory / f"{stage}-spec.md").write_text(
+            render(f"{case.title}: {stage.title()}", data), encoding="utf-8"
+        )
+        directory.rename(path / stage)
+    validate_progress(path)
+    return path / stage
 
 
 def spec_digest(path):
@@ -314,15 +406,28 @@ def require_approval(path):
         )
 
 
-def require_dependencies(path, dependencies):
+def require_dependencies(path, dependencies, checked=None, context=None):
+    checked = set() if checked is None else checked
+    # A context lives only for one read/check, never across edits or CLI invocations.
+    if context is None:
+        context = ({t.id: t for t in validate(path)[2].tasks}, spec_digest(path))
+    tasks, current_digest = context
     for dependency in dependencies:
+        if dependency in checked:
+            continue
+        if dependency not in tasks:
+            raise ValueError(f"Unknown prerequisite: {dependency}")
+        checked.add(dependency)
         receipt = path / "implementation" / "receipts" / f"{dependency}.json"
+        if not receipt.resolve().is_relative_to(path.resolve()):
+            raise ValueError("Completion receipt escapes solution")
         if not receipt.exists():
             raise ValueError(f"Incomplete prerequisite: {dependency}")
         data = json.loads(receipt.read_text(encoding="utf-8"))
         if (
             not data["evidence"]
-            or data["spec_digest"] != spec_digest(path)
+            or data.get("task") != dependency
+            or data["spec_digest"] != current_digest
             or any(
                 not (path / file).resolve().is_relative_to(path.resolve())
                 or not (path / file).is_file()
@@ -331,6 +436,15 @@ def require_dependencies(path, dependencies):
             )
         ):
             raise ValueError(f"Stale completion evidence: {dependency}")
+        require_dependencies(path, tasks[dependency].dependencies, checked, context)
+        current_dependencies = {
+            prerequisite: hashlib.sha256(
+                (path / "implementation/receipts" / f"{prerequisite}.json").read_bytes()
+            ).hexdigest()
+            for prerequisite in tasks[dependency].dependencies
+        }
+        if data.get("dependencies", {}) != current_dependencies:
+            raise ValueError(f"Stale prerequisite receipts: {dependency}")
 
 
 def run_skill(root, path, skill):
@@ -342,6 +456,8 @@ def run_skill(root, path, skill):
     require_dependencies(path, set(d for t in tasks for d in t.dependencies))
     guidance = (root / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
     destination = path / "implementation" / "work-packages"
+    if not destination.resolve().is_relative_to(path.resolve()):
+        raise ValueError("Work-package path escapes solution")
     destination.mkdir(parents=True, exist_ok=True)
     packet = destination / f"{skill}.md"
     packet.write_text(
@@ -369,6 +485,8 @@ def complete(path, task_id, evidence, reviewer):
             raise ValueError("Evidence must be an existing file inside the solution")
         hashes[relative] = hashlib.sha256(file.read_bytes()).hexdigest()
     receipt = path / "implementation" / "receipts" / f"{task_id}.json"
+    if not receipt.resolve().is_relative_to(path.resolve()):
+        raise ValueError("Completion receipt escapes solution")
     receipt.parent.mkdir(parents=True, exist_ok=True)
     receipt.write_text(
         json.dumps(
@@ -377,6 +495,12 @@ def complete(path, task_id, evidence, reviewer):
                 "reviewer": reviewer,
                 "spec_digest": spec_digest(path),
                 "evidence": hashes,
+                "dependencies": {
+                    prerequisite: hashlib.sha256(
+                        (path / "implementation/receipts" / f"{prerequisite}.json").read_bytes()
+                    ).hexdigest()
+                    for prerequisite in task.dependencies
+                },
                 "at": datetime.now(timezone.utc).isoformat(),
             },
             indent=2,

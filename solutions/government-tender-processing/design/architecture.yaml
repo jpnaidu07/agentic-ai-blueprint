@@ -1,6 +1,6 @@
 schema_version: 1
 solution: government-tender-processing
-capability_digest: 0f4f9ea5b1ace06bd4f88a108183471216db2a401465993f7fa0438659414ed1
+capability_digest: 79618f2ee49293733b3a3690f051b7274de7e6935f75a0789ba2414fdeb529de
 modules:
 - number: 1
   name: Purpose & Scope

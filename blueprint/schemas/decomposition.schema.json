@@ -51,6 +51,15 @@
           "title": "Affected Modules",
           "type": "array"
         },
+        "blueprint_modules": {
+          "items": {
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "title": "Blueprint Modules",
+          "type": "array"
+        },
         "api_contract": {
           "title": "Api Contract",
           "type": "string"

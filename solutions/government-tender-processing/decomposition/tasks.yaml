@@ -1,29 +1,92 @@
 schema_version: 1
 solution: government-tender-processing
-design_digest: 12421fd193db8d4e9263803328855ebcbcb4bde335d87c902e07d3ceccd68a82
+design_digest: e77cd0039a178639395b8e672d59c8c2f59ac4c92b15a9883cc38722df80e650
 tasks:
+- id: TASK-CAP-DATA
+  parent_capability: CAP-DATA
+  objective: Persist tenders, bids, evidence revisions and audit records with foreign
+    keys and transactional integrity.
+  skill: database
+  dependencies: []
+  inputs:
+  - capability/capability.yaml
+  - design/architecture.yaml
+  - implementation/README.md
+  outputs:
+  - implementation/database/task-cap-data-evidence.md
+  affected_modules:
+  - implementation/database
+  blueprint_modules:
+  - 5
+  api_contract: Review actual typed interfaces in repository-root src/tender/store.py;
+    the implementation map records this deliberate shared-source exception.
+  data_contract: Tenders, bids, documents, fact revisions, evaluation snapshots, decisions
+    and audit_events; foreign keys, unique request keys and transactional rollback.
+  agent_tools:
+  - Use only design-approved tools with caller resource scope
+  instructions:
+  - The reference already implements this concern in repository-root src/tender/store.py.
+    Explain and verify it; extend only gaps. Do not copy it into a duplicate service.
+  - Persist tenders, bids, evidence revisions and audit records with foreign keys
+    and transactional integrity.
+  - Explain the goal, design choice and success check before implementation; then
+    build and test real code.
+  - Use solution-local source unless an existing reference is explicitly mapped. Identify
+    database, service, agent and UI files as applicable.
+  - For unavailable credentials or host services, record the exact prerequisite, user
+    action and verification command; do not mark the task complete.
+  - Record implementation files and validation evidence in the completion receipt.
+  tests:
+  - Verify schema creation, foreign keys, unique evaluation keys and transactional
+    rollback against the selected development database.
+  - Document migration and backup/restore prerequisites separately from SQLite test
+    evidence.
+  definition_of_done:
+  - Verify schema creation, foreign keys, unique evaluation keys and transactional
+    rollback against the selected development database.
+  - Document migration and backup/restore prerequisites separately from SQLite test
+    evidence.
+  - No secrets; tests pass; evidence reviewed
 - id: TASK-CAP-IDENTITY
   parent_capability: CAP-IDENTITY
   objective: Enforce authenticated roles and tender scope on every operation including
     documents, searches and audit access.
   skill: security
-  dependencies: []
+  dependencies:
+  - TASK-CAP-DATA
   inputs:
   - capability/capability.yaml
   - design/architecture.yaml
+  - implementation/README.md
   outputs:
-  - implementation/security/cap-identity.md
+  - implementation/security/task-cap-identity-evidence.md
   affected_modules:
   - implementation/security
-  api_contract: Derive request/response and error schemas from this capability; review
-    before coding.
-  data_contract: Define typed records, relationships, validation and migration from
-    this capability.
+  blueprint_modules:
+  - 2
+  - 4
+  - 5
+  - 6
+  - 7
+  api_contract: Review actual typed interfaces in repository-root src/tender/security.py
+    and src/tender/api.py; the implementation map records this deliberate shared-source
+    exception.
+  data_contract: Bearer identity, roles and tender scopes; enforce caller scope before
+    loading records.
   agent_tools:
   - Use only design-approved tools with caller resource scope
   instructions:
+  - The reference already implements this concern in repository-root src/tender/security.py
+    and src/tender/api.py. Explain and verify it; extend only gaps. Do not copy it
+    into a duplicate service.
   - Enforce authenticated roles and tender scope on every operation including documents,
     searches and audit access.
+  - Explain the goal, design choice and success check before implementation; then
+    build and test real code.
+  - Use solution-local source unless an existing reference is explicitly mapped. Identify
+    database, service, agent and UI files as applicable.
+  - For unavailable credentials or host services, record the exact prerequisite, user
+    action and verification command; do not mark the task complete.
   - Record implementation files and validation evidence in the completion receipt.
   tests:
   - Missing or invalid bearer tokens are rejected.
@@ -39,23 +102,40 @@ tasks:
   objective: Validate digital PDF uploads, extract page-aware text and segment evidence
     without losing provenance.
   skill: backend
-  dependencies: []
+  dependencies:
+  - TASK-CAP-DATA
+  - TASK-CAP-IDENTITY
   inputs:
   - capability/capability.yaml
   - design/architecture.yaml
+  - implementation/README.md
   outputs:
-  - implementation/backend/cap-ingest.md
+  - implementation/backend/task-cap-ingest-evidence.md
   affected_modules:
   - implementation/backend
-  api_contract: Derive request/response and error schemas from this capability; review
-    before coding.
-  data_contract: Define typed records, relationships, validation and migration from
-    this capability.
+  blueprint_modules:
+  - 1
+  - 4
+  - 5
+  api_contract: Review actual typed interfaces in repository-root src/tender/documents.py
+    and src/tender/api.py; the implementation map records this deliberate shared-source
+    exception.
+  data_contract: Document bytes/hash, page text and chunks linked to the owning tender
+    and bid; deduplicate only within that scope.
   agent_tools:
   - Use only design-approved tools with caller resource scope
   instructions:
+  - The reference already implements this concern in repository-root src/tender/documents.py
+    and src/tender/api.py. Explain and verify it; extend only gaps. Do not copy it
+    into a duplicate service.
   - Validate digital PDF uploads, extract page-aware text and segment evidence without
     losing provenance.
+  - Explain the goal, design choice and success check before implementation; then
+    build and test real code.
+  - Use solution-local source unless an existing reference is explicitly mapped. Identify
+    database, service, agent and UI files as applicable.
+  - For unavailable credentials or host services, record the exact prerequisite, user
+    action and verification command; do not mark the task complete.
   - Record implementation files and validation evidence in the completion receipt.
   tests:
   - Reject malformed, oversized, encrypted, interactive and scanned-only PDFs with
@@ -75,23 +155,40 @@ tasks:
   objective: Propose numeric requirement observations through configurable models
     and accept only explicitly reviewed evidence.
   skill: agents
-  dependencies: []
+  dependencies:
+  - TASK-CAP-INGEST
   inputs:
   - capability/capability.yaml
   - design/architecture.yaml
+  - implementation/README.md
   outputs:
-  - implementation/agents/cap-facts.md
+  - implementation/agents/task-cap-facts-evidence.md
   affected_modules:
   - implementation/agents
-  api_contract: Derive request/response and error schemas from this capability; review
-    before coding.
-  data_contract: Define typed records, relationships, validation and migration from
-    this capability.
+  blueprint_modules:
+  - 2
+  - 3
+  - 4
+  - 6
+  api_contract: Review actual typed interfaces in repository-root src/agent/llm_client.py
+    and src/tender/api.py; the implementation map records this deliberate shared-source
+    exception.
+  data_contract: Typed proposed observations never become accepted facts without exact
+    page/quote verification and human review.
   agent_tools:
   - Use only design-approved tools with caller resource scope
   instructions:
+  - The reference already implements this concern in repository-root src/agent/llm_client.py
+    and src/tender/api.py. Explain and verify it; extend only gaps. Do not copy it
+    into a duplicate service.
   - Propose numeric requirement observations through configurable models and accept
     only explicitly reviewed evidence.
+  - Explain the goal, design choice and success check before implementation; then
+    build and test real code.
+  - Use solution-local source unless an existing reference is explicitly mapped. Identify
+    database, service, agent and UI files as applicable.
+  - For unavailable credentials or host services, record the exact prerequisite, user
+    action and verification command; do not mark the task complete.
   - Record implementation files and validation evidence in the completion receipt.
   tests:
   - Model output cannot accept facts or approve procurement decisions.
@@ -107,23 +204,37 @@ tasks:
   objective: Calculate published weighted scores, eligibility gates, L1 comparison
     and equal ranks for ties deterministically.
   skill: backend
-  dependencies: []
+  dependencies:
+  - TASK-CAP-FACTS
   inputs:
   - capability/capability.yaml
   - design/architecture.yaml
+  - implementation/README.md
   outputs:
-  - implementation/backend/cap-score.md
+  - implementation/backend/task-cap-score-evidence.md
   affected_modules:
   - implementation/backend
-  api_contract: Derive request/response and error schemas from this capability; review
-    before coding.
-  data_contract: Define typed records, relationships, validation and migration from
-    this capability.
+  blueprint_modules:
+  - 1
+  - 4
+  - 6
+  api_contract: Review actual typed interfaces in repository-root src/tender/models.py;
+    the implementation map records this deliberate shared-source exception.
+  data_contract: Decimal policy weights, eligibility gates, complete reviewed facts,
+    L1 baseline and equal ranks; no model ranking.
   agent_tools:
   - Use only design-approved tools with caller resource scope
   instructions:
+  - The reference already implements this concern in repository-root src/tender/models.py.
+    Explain and verify it; extend only gaps. Do not copy it into a duplicate service.
   - Calculate published weighted scores, eligibility gates, L1 comparison and equal
     ranks for ties deterministically.
+  - Explain the goal, design choice and success check before implementation; then
+    build and test real code.
+  - Use solution-local source unless an existing reference is explicitly mapped. Identify
+    database, service, agent and UI files as applicable.
+  - For unavailable credentials or host services, record the exact prerequisite, user
+    action and verification command; do not mark the task complete.
   - Record implementation files and validation evidence in the completion receipt.
   tests:
   - Scored weights total exactly 100 and mandatory eligibility has zero score weight.
@@ -139,23 +250,40 @@ tasks:
   objective: Persist versioned evaluations, reject stale approvals and require independent
     human decisions.
   skill: backend
-  dependencies: []
+  dependencies:
+  - TASK-CAP-SCORE
+  - TASK-CAP-IDENTITY
   inputs:
   - capability/capability.yaml
   - design/architecture.yaml
+  - implementation/README.md
   outputs:
-  - implementation/backend/cap-review.md
+  - implementation/backend/task-cap-review-evidence.md
   affected_modules:
   - implementation/backend
-  api_contract: Derive request/response and error schemas from this capability; review
-    before coding.
-  data_contract: Define typed records, relationships, validation and migration from
-    this capability.
+  blueprint_modules:
+  - 4
+  - 5
+  - 6
+  api_contract: Review actual typed interfaces in repository-root src/tender/api.py
+    and src/tender/store.py; the implementation map records this deliberate shared-source
+    exception.
+  data_contract: Evaluation idempotency key, evidence revision and independent review
+    decisions; reject stale and self approvals.
   agent_tools:
   - Use only design-approved tools with caller resource scope
   instructions:
+  - The reference already implements this concern in repository-root src/tender/api.py
+    and src/tender/store.py. Explain and verify it; extend only gaps. Do not copy
+    it into a duplicate service.
   - Persist versioned evaluations, reject stale approvals and require independent
     human decisions.
+  - Explain the goal, design choice and success check before implementation; then
+    build and test real code.
+  - Use solution-local source unless an existing reference is explicitly mapped. Identify
+    database, service, agent and UI files as applicable.
+  - For unavailable credentials or host services, record the exact prerequisite, user
+    action and verification command; do not mark the task complete.
   - Record implementation files and validation evidence in the completion receipt.
   tests:
   - Repeating an evaluation key with unchanged inputs returns the same result.
@@ -173,23 +301,39 @@ tasks:
   objective: Retrieve tender-scoped page evidence using lexical search and expose
     a hybrid retrieval extension.
   skill: rag
-  dependencies: []
+  dependencies:
+  - TASK-CAP-INGEST
   inputs:
   - capability/capability.yaml
   - design/architecture.yaml
+  - implementation/README.md
   outputs:
-  - implementation/rag/cap-search.md
+  - implementation/rag/task-cap-search-evidence.md
   affected_modules:
   - implementation/rag
-  api_contract: Derive request/response and error schemas from this capability; review
-    before coding.
-  data_contract: Define typed records, relationships, validation and migration from
-    this capability.
+  blueprint_modules:
+  - 3
+  - 4
+  - 5
+  api_contract: Review actual typed interfaces in repository-root src/tender/documents.py
+    and src/tender/api.py; the implementation map records this deliberate shared-source
+    exception.
+  data_contract: Scoped page evidence with document, page, bidder and tender identifiers;
+    SQL is authority for counts and ranking.
   agent_tools:
   - Use only design-approved tools with caller resource scope
   instructions:
+  - The reference already implements this concern in repository-root src/tender/documents.py
+    and src/tender/api.py. Explain and verify it; extend only gaps. Do not copy it
+    into a duplicate service.
   - Retrieve tender-scoped page evidence using lexical search and expose a hybrid
     retrieval extension.
+  - Explain the goal, design choice and success check before implementation; then
+    build and test real code.
+  - Use solution-local source unless an existing reference is explicitly mapped. Identify
+    database, service, agent and UI files as applicable.
+  - For unavailable credentials or host services, record the exact prerequisite, user
+    action and verification command; do not mark the task complete.
   - Record implementation files and validation evidence in the completion receipt.
   tests:
   - Unknown queries return insufficient evidence without invented answers.
@@ -207,23 +351,38 @@ tasks:
   objective: Provide an accessible portfolio and tender dashboard with evidence review,
     scores, risk flags and audit history.
   skill: frontend
-  dependencies: []
+  dependencies:
+  - TASK-CAP-REVIEW
+  - TASK-CAP-SEARCH
   inputs:
   - capability/capability.yaml
   - design/architecture.yaml
+  - implementation/README.md
   outputs:
-  - implementation/frontend/cap-portal.md
+  - implementation/frontend/task-cap-portal-evidence.md
   affected_modules:
   - implementation/frontend
-  api_contract: Derive request/response and error schemas from this capability; review
-    before coding.
-  data_contract: Define typed records, relationships, validation and migration from
-    this capability.
+  blueprint_modules:
+  - 7
+  api_contract: Review actual typed interfaces in repository-root src/tender/ui/ and
+    src/tender/api.py; the implementation map records this deliberate shared-source
+    exception.
+  data_contract: Same-origin authenticated API responses; untrusted values use textContent
+    and expose empty/error/stale states.
   agent_tools:
   - Use only design-approved tools with caller resource scope
   instructions:
+  - The reference already implements this concern in repository-root src/tender/ui/
+    and src/tender/api.py. Explain and verify it; extend only gaps. Do not copy it
+    into a duplicate service.
   - Provide an accessible portfolio and tender dashboard with evidence review, scores,
     risk flags and audit history.
+  - Explain the goal, design choice and success check before implementation; then
+    build and test real code.
+  - Use solution-local source unless an existing reference is explicitly mapped. Identify
+    database, service, agent and UI files as applicable.
+  - For unavailable credentials or host services, record the exact prerequisite, user
+    action and verification command; do not mark the task complete.
   - Record implementation files and validation evidence in the completion receipt.
   tests:
   - Show active, closed, low-participation and approved tenders from actual records.
@@ -239,23 +398,39 @@ tasks:
   objective: Run the development reference on a 32 GB Windows laptop using bounded
     containers and explicit prerequisites.
   skill: infrastructure
-  dependencies: []
+  dependencies:
+  - TASK-CAP-PORTAL
   inputs:
   - capability/capability.yaml
   - design/architecture.yaml
+  - implementation/README.md
   outputs:
-  - implementation/infrastructure/cap-ops.md
+  - implementation/infrastructure/task-cap-ops-evidence.md
   affected_modules:
   - implementation/infrastructure
-  api_contract: Derive request/response and error schemas from this capability; review
-    before coding.
-  data_contract: Define typed records, relationships, validation and migration from
-    this capability.
+  blueprint_modules:
+  - 4
+  - 5
+  - 6
+  api_contract: Review actual typed interfaces in repository-root docker-compose.yml,
+    infra/Dockerfile.backend, setup.ps1 and run.ps1; the implementation map records
+    this deliberate shared-source exception.
+  data_contract: Environment-only secrets, loopback app/Postgres, bounded services,
+    unique identities and health checks.
   agent_tools:
   - Use only design-approved tools with caller resource scope
   instructions:
+  - The reference already implements this concern in repository-root docker-compose.yml,
+    infra/Dockerfile.backend, setup.ps1 and run.ps1. Explain and verify it; extend
+    only gaps. Do not copy it into a duplicate service.
   - Run the development reference on a 32 GB Windows laptop using bounded containers
     and explicit prerequisites.
+  - Explain the goal, design choice and success check before implementation; then
+    build and test real code.
+  - Use solution-local source unless an existing reference is explicitly mapped. Identify
+    database, service, agent and UI files as applicable.
+  - For unavailable credentials or host services, record the exact prerequisite, user
+    action and verification command; do not mark the task complete.
   - Record implementation files and validation evidence in the completion receipt.
   tests:
   - Core Compose requires no local LLM and publishes application ports on loopback
@@ -273,10 +448,11 @@ tasks:
     CI.
   - No secrets; tests pass; evidence reviewed
 - id: TASK-TESTS
-  parent_capability: CAP-IDENTITY
+  parent_capability: CAP-DATA
   objective: Validate tests against approved capabilities
   skill: tests
   dependencies:
+  - TASK-CAP-DATA
   - TASK-CAP-IDENTITY
   - TASK-CAP-INGEST
   - TASK-CAP-FACTS
@@ -287,10 +463,13 @@ tasks:
   - TASK-CAP-OPS
   inputs:
   - decomposition/tasks.yaml
+  - implementation/README.md
   outputs:
   - implementation/tests/evidence.md
   affected_modules:
   - implementation/tests
+  blueprint_modules:
+  - 8
   api_contract: Exercise approved API contracts
   data_contract: Use synthetic fixtures only
   agent_tools: []
@@ -301,17 +480,20 @@ tasks:
   definition_of_done:
   - Evidence exists and reviewer accepts the results
 - id: TASK-EVALS
-  parent_capability: CAP-IDENTITY
+  parent_capability: CAP-DATA
   objective: Validate evals against approved capabilities
   skill: evals
   dependencies:
   - TASK-TESTS
   inputs:
   - decomposition/tasks.yaml
+  - implementation/README.md
   outputs:
   - implementation/evals/evidence.md
   affected_modules:
   - implementation/evals
+  blueprint_modules:
+  - 8
   api_contract: Exercise approved API contracts
   data_contract: Use synthetic fixtures only
   agent_tools: []
@@ -322,17 +504,22 @@ tasks:
   definition_of_done:
   - Evidence exists and reviewer accepts the results
 - id: TASK-DEPLOYMENT
-  parent_capability: CAP-IDENTITY
+  parent_capability: CAP-DATA
   objective: Validate deployment against approved capabilities
   skill: deployment
   dependencies:
   - TASK-EVALS
   inputs:
   - decomposition/tasks.yaml
+  - implementation/README.md
   outputs:
   - implementation/deployment/evidence.md
   affected_modules:
   - implementation/deployment
+  blueprint_modules:
+  - 4
+  - 6
+  - 8
   api_contract: Exercise approved API contracts
   data_contract: Use synthetic fixtures only
   agent_tools: []

@@ -10,14 +10,24 @@ personas:
 journeys:
   - Employee submits a request; classifier proposes a queue; operator approves uncertainty; owner acknowledges.
 requirements:
+  - id: CAP-DATA
+    objective: Store requests, department ownership and routing history with transactional integrity.
+    skill: database
+    blueprint_modules: [5]
+    acceptance:
+      - Invalid department references and duplicate request keys are rejected by storage constraints.
   - id: CAP-01
     objective: Persist requests and route them only to an allowlisted team with an audit record.
     skill: backend
+    depends_on: [CAP-DATA]
+    blueprint_modules: [1, 4, 5, 6]
     acceptance:
       - Unknown teams are rejected; retrying the same request does not duplicate it.
   - id: CAP-02
     objective: Show request status and routing evidence to the requester and assigned team.
     skill: frontend
+    depends_on: [CAP-01]
+    blueprint_modules: [7]
     acceptance:
       - Users cannot view requests belonging to another department.
 business_rules:

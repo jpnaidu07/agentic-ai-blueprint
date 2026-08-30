@@ -23,7 +23,7 @@ def test_first_run_only_creates_specs_and_requires_approval(solution):
     with pytest.raises(ValueError, match="approval"):
         specs.run_skill(root, path, "backend")
     specs.approve(path, "local-reviewer")
-    assert specs.run_skill(root, path, "backend").is_file()
+    assert specs.run_skill(root, path, "database").is_file()
     with pytest.raises(ValueError, match="prerequisite"):
         specs.run_skill(root, path, "tests")
 
@@ -65,7 +65,7 @@ def test_receipt_evidence_cannot_change_silently(solution):
     evidence.write_text("Verified implementation and test results", encoding="utf-8")
     _, _, decomp = specs.validate(path)
     for task in decomp.tasks:
-        if task.skill in {"backend", "frontend"}:
+        if task.skill in {"database", "backend", "frontend"}:
             specs.complete(path, task.id, ["evidence.txt"], "reviewer")
     assert specs.run_skill(root, path, "tests").exists()
     evidence.write_text("Changed", encoding="utf-8")

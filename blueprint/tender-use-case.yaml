@@ -16,9 +16,17 @@ journeys:
   - Reviewer checks the current evidence revision and records a reasoned independent decision.
   - Auditor reconstructs the policy, document digest, fact revisions and decision from retained records.
 requirements:
+  - id: CAP-DATA
+    objective: Persist tenders, bids, evidence revisions and audit records with foreign keys and transactional integrity.
+    skill: database
+    blueprint_modules: [5]
+    acceptance:
+      - Verify schema creation, foreign keys, unique evaluation keys and transactional rollback against the selected development database.
+      - Document migration and backup/restore prerequisites separately from SQLite test evidence.
   - id: CAP-IDENTITY
     objective: Enforce authenticated roles and tender scope on every operation including documents, searches and audit access.
     skill: security
+    depends_on: [CAP-DATA]
     acceptance:
       - Missing or invalid bearer tokens are rejected.
       - Cross-tender document IDs and bid IDs never reveal evidence.
@@ -26,6 +34,8 @@ requirements:
   - id: CAP-INGEST
     objective: Validate digital PDF uploads, extract page-aware text and segment evidence without losing provenance.
     skill: backend
+    depends_on: [CAP-DATA, CAP-IDENTITY]
+    blueprint_modules: [1, 4, 5]
     acceptance:
       - Reject malformed, oversized, encrypted, interactive and scanned-only PDFs with an actionable response.
       - Uploading identical bytes within the same tender and bid scope returns the existing document.
@@ -33,6 +43,7 @@ requirements:
   - id: CAP-FACTS
     objective: Propose numeric requirement observations through configurable models and accept only explicitly reviewed evidence.
     skill: agents
+    depends_on: [CAP-INGEST]
     acceptance:
       - Model output cannot accept facts or approve procurement decisions.
       - Every accepted fact cites an existing page and exact quote in that bidder's document.
@@ -40,6 +51,8 @@ requirements:
   - id: CAP-SCORE
     objective: Calculate published weighted scores, eligibility gates, L1 comparison and equal ranks for ties deterministically.
     skill: backend
+    depends_on: [CAP-FACTS]
+    blueprint_modules: [1, 4, 6]
     acceptance:
       - Scored weights total exactly 100 and mandatory eligibility has zero score weight.
       - Missing evidence, low confidence or nonpositive commercial totals block ranking.
@@ -47,6 +60,8 @@ requirements:
   - id: CAP-REVIEW
     objective: Persist versioned evaluations, reject stale approvals and require independent human decisions.
     skill: backend
+    depends_on: [CAP-SCORE, CAP-IDENTITY]
+    blueprint_modules: [4, 5, 6]
     acceptance:
       - Repeating an evaluation key with unchanged inputs returns the same result.
       - Reusing the key after evidence changes returns a conflict.
@@ -54,6 +69,7 @@ requirements:
   - id: CAP-SEARCH
     objective: Retrieve tender-scoped page evidence using lexical search and expose a hybrid retrieval extension.
     skill: rag
+    depends_on: [CAP-INGEST]
     acceptance:
       - Unknown queries return insufficient evidence without invented answers.
       - Search results contain document, page, section, bidder and tender identifiers.
@@ -61,6 +77,7 @@ requirements:
   - id: CAP-PORTAL
     objective: Provide an accessible portfolio and tender dashboard with evidence review, scores, risk flags and audit history.
     skill: frontend
+    depends_on: [CAP-REVIEW, CAP-SEARCH]
     acceptance:
       - Show active, closed, low-participation and approved tenders from actual records.
       - Render untrusted names, documents and model outputs as text, never HTML.
@@ -68,6 +85,7 @@ requirements:
   - id: CAP-OPS
     objective: Run the development reference on a 32 GB Windows laptop using bounded containers and explicit prerequisites.
     skill: infrastructure
+    depends_on: [CAP-PORTAL]
     acceptance:
       - Core Compose requires no local LLM and publishes application ports on loopback only.
       - Setup detects Docker and credentials, creates unique local identities and never installs host system services silently.

@@ -53,6 +53,18 @@ Evaluation committees must inspect many technical and commercial PDF bids agains
 ## Requirements
 
 ```yaml
+- id: CAP-DATA
+  objective: Persist tenders, bids, evidence revisions and audit records with foreign
+    keys and transactional integrity.
+  acceptance:
+  - Verify schema creation, foreign keys, unique evaluation keys and transactional
+    rollback against the selected development database.
+  - Document migration and backup/restore prerequisites separately from SQLite test
+    evidence.
+  skill: database
+  depends_on: []
+  blueprint_modules:
+  - 5
 - id: CAP-IDENTITY
   objective: Enforce authenticated roles and tender scope on every operation including
     documents, searches and audit access.
@@ -61,6 +73,9 @@ Evaluation committees must inspect many technical and commercial PDF bids agains
   - Cross-tender document IDs and bid IDs never reveal evidence.
   - An evaluator cannot approve their own work, including after a role change.
   skill: security
+  depends_on:
+  - CAP-DATA
+  blueprint_modules: []
 - id: CAP-INGEST
   objective: Validate digital PDF uploads, extract page-aware text and segment evidence
     without losing provenance.
@@ -71,6 +86,13 @@ Evaluation committees must inspect many technical and commercial PDF bids agains
     document.
   - Retain original bytes, SHA-256, page text, chunk offsets and scanner status.
   skill: backend
+  depends_on:
+  - CAP-DATA
+  - CAP-IDENTITY
+  blueprint_modules:
+  - 1
+  - 4
+  - 5
 - id: CAP-FACTS
   objective: Propose numeric requirement observations through configurable models
     and accept only explicitly reviewed evidence.
@@ -79,6 +101,9 @@ Evaluation committees must inspect many technical and commercial PDF bids agains
   - Every accepted fact cites an existing page and exact quote in that bidder's document.
   - Missing evidence or invalid model JSON fails without creating facts.
   skill: agents
+  depends_on:
+  - CAP-INGEST
+  blueprint_modules: []
 - id: CAP-SCORE
   objective: Calculate published weighted scores, eligibility gates, L1 comparison
     and equal ranks for ties deterministically.
@@ -87,6 +112,12 @@ Evaluation committees must inspect many technical and commercial PDF bids agains
   - Missing evidence, low confidence or nonpositive commercial totals block ranking.
   - Ineligible bids cannot set the commercial baseline or receive a rank.
   skill: backend
+  depends_on:
+  - CAP-FACTS
+  blueprint_modules:
+  - 1
+  - 4
+  - 6
 - id: CAP-REVIEW
   objective: Persist versioned evaluations, reject stale approvals and require independent
     human decisions.
@@ -96,6 +127,13 @@ Evaluation committees must inspect many technical and commercial PDF bids agains
   - A reviewer cannot approve incomplete or stale evidence; approval freezes the reference
     evaluation.
   skill: backend
+  depends_on:
+  - CAP-SCORE
+  - CAP-IDENTITY
+  blueprint_modules:
+  - 4
+  - 5
+  - 6
 - id: CAP-SEARCH
   objective: Retrieve tender-scoped page evidence using lexical search and expose
     a hybrid retrieval extension.
@@ -105,6 +143,9 @@ Evaluation committees must inspect many technical and commercial PDF bids agains
   - Structured bidder counts and rankings come from SQL and scoring snapshots, not
     vector similarity.
   skill: rag
+  depends_on:
+  - CAP-INGEST
+  blueprint_modules: []
 - id: CAP-PORTAL
   objective: Provide an accessible portfolio and tender dashboard with evidence review,
     scores, risk flags and audit history.
@@ -113,6 +154,10 @@ Evaluation committees must inspect many technical and commercial PDF bids agains
   - Render untrusted names, documents and model outputs as text, never HTML.
   - Display stale revisions and missing evidence next to scores and approval controls.
   skill: frontend
+  depends_on:
+  - CAP-REVIEW
+  - CAP-SEARCH
+  blueprint_modules: []
 - id: CAP-OPS
   objective: Run the development reference on a 32 GB Windows laptop using bounded
     containers and explicit prerequisites.
@@ -124,6 +169,9 @@ Evaluation committees must inspect many technical and commercial PDF bids agains
   - Provide reproducible tests, evaluation datasets, schema and link validation in
     CI.
   skill: infrastructure
+  depends_on:
+  - CAP-PORTAL
+  blueprint_modules: []
 ```
 
 ## Business Rules

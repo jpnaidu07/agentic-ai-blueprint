@@ -24,6 +24,7 @@
         "skill": {
           "enum": [
             "backend",
+            "database",
             "frontend",
             "agents",
             "rag",
@@ -32,6 +33,22 @@
           ],
           "title": "Skill",
           "type": "string"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "blueprint_modules": {
+          "items": {
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "title": "Blueprint Modules",
+          "type": "array"
         }
       },
       "required": [

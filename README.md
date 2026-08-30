@@ -26,8 +26,10 @@ Business use case
   → Deployment gates
 ```
 
-The first execution creates three specifications only. It does not hide an
-unbounded coding agent behind a "generate app" command.
+Generate the specs all at once or stop after capability/design. Then use the
+guided coding-agent workflow to **explain → implement → test → record evidence**
+for all tasks, the next step, a skill or a numbered blueprint section. The CLI
+prepares plans and enforces evidence gates; the coding agent/developer writes code.
 
 ## Eight modules
 
@@ -76,6 +78,8 @@ Copy-Item templates/use-case.yaml customer-returns.yaml
 # Edit problem, personas, journeys, requirements, rules, risks and acceptance.
 agent-blueprint create customer-returns.yaml
 agent-blueprint validate customer-returns
+# Alternatively, for a NEW solution: create customer-returns.yaml --through capability
+# Then: spec customer-returns design; spec customer-returns decomposition
 ```
 
 The result is:
@@ -99,13 +103,22 @@ upstream digests and record local approval. Then request only selected work:
 
 ```powershell
 agent-blueprint approve customer-returns --reviewer your-name
-agent-blueprint run customer-returns backend
-agent-blueprint run customer-returns agents
+agent-blueprint run customer-returns all
+# Or: run customer-returns next / database / backend / TASK-CAP-DATA
+# Or one blueprint section: run customer-returns --module 5
+agent-blueprint status customer-returns
 ```
 
-A `run` command creates a dependency-checked engineering packet. A developer or
-coding agent implements it. `agent-blueprint complete` records evidence hashes
-after implementation; stale specs or evidence invalidate downstream work.
+A `run` command creates a teaching/execution plan, with dependency order and
+ready/blocked status. Ask your coding agent to use
+[blueprint-workflow](.agents/skills/blueprint-workflow/SKILL.md) to teach and implement
+the plan. `agent-blueprint complete` records evidence after actual implementation;
+stale specs, evidence or upstream receipts invalidate downstream work.
+
+See [the guided workflow](docs/workflow.md) for exact prompts, staged spec commands,
+all/next/task/skill/section selection, database work, manual prerequisite reporting
+and the government tender walkthrough. Existing tender specs are already present:
+start with `agent-blueprint guide government-tender-processing`, not `create`.
 
 The template accepts any business domain that can be expressed through its strict
 use-case schema. It does not infer a complete legal/business policy from one line

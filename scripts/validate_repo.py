@@ -12,7 +12,7 @@ import yaml
 from jsonschema import Draft202012Validator
 
 from src.blueprint.models import Decomposition, Design, UseCase
-from src.blueprint.specs import validate
+from src.blueprint.specs import validate_progress
 from src.tender.models import FactInput, TenderInput
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -77,7 +77,7 @@ def main():
     for path in (ROOT / "solutions").iterdir():
         if path.is_dir() and not path.name.startswith("."):
             try:
-                validate(path)
+                validate_progress(path)
             except (ValueError, OSError) as exc:
                 errors.append(f"Spec {path.name}: {exc}")
     for name, model in [

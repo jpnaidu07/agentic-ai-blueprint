@@ -1,6 +1,7 @@
 """Versioned, strict input and specification contracts."""
 
-from typing import Literal
+from graphlib import TopologicalSorter
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -13,7 +14,9 @@ class Requirement(Contract):
     id: str = Field(pattern=r"^[A-Z][A-Z0-9-]{1,39}$")
     objective: str = Field(min_length=10)
     acceptance: list[str] = Field(min_length=1)
-    skill: Literal["backend", "frontend", "agents", "rag", "infrastructure", "security"]
+    skill: Literal["backend", "database", "frontend", "agents", "rag", "infrastructure", "security"]
+    depends_on: list[str] = Field(default_factory=list)
+    blueprint_modules: list[Annotated[int, Field(ge=1, le=8)]] = Field(default_factory=list)
 
 
 class UseCase(Contract):
@@ -44,6 +47,12 @@ class UseCase(Contract):
         ids = [r.id for r in self.requirements]
         if len(ids) != len(set(ids)):
             raise ValueError("Requirement IDs must be unique")
+        if set(ids) & {"TESTS", "EVALS", "DEPLOYMENT"}:
+            raise ValueError("TESTS, EVALS and DEPLOYMENT are reserved gate IDs")
+        for requirement in self.requirements:
+            if set(requirement.depends_on) - set(ids):
+                raise ValueError(f"Unknown requirement dependency: {requirement.id}")
+        list(TopologicalSorter({r.id: r.depends_on for r in self.requirements}).static_order())
         return self
 
 
@@ -71,6 +80,7 @@ class Task(Contract):
     inputs: list[str] = Field(min_length=1)
     outputs: list[str] = Field(min_length=1)
     affected_modules: list[str] = Field(min_length=1)
+    blueprint_modules: list[Annotated[int, Field(ge=1, le=8)]] = Field(default_factory=list)
     api_contract: str
     data_contract: str
     agent_tools: list[str]
