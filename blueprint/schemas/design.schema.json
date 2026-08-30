@@ -1,0 +1,85 @@
+{
+  "$defs": {
+    "Module": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Number",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "decisions": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Decisions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "number",
+        "name",
+        "decisions"
+      ],
+      "title": "Module",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "solution": {
+      "title": "Solution",
+      "type": "string"
+    },
+    "capability_digest": {
+      "title": "Capability Digest",
+      "type": "string"
+    },
+    "modules": {
+      "items": {
+        "$ref": "#/$defs/Module"
+      },
+      "maxItems": 8,
+      "minItems": 8,
+      "title": "Modules",
+      "type": "array"
+    },
+    "tradeoffs": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Tradeoffs",
+      "type": "array"
+    },
+    "production_gates": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Production Gates",
+      "type": "array"
+    }
+  },
+  "required": [
+    "solution",
+    "capability_digest",
+    "modules",
+    "tradeoffs",
+    "production_gates"
+  ],
+  "title": "Design",
+  "type": "object"
+}

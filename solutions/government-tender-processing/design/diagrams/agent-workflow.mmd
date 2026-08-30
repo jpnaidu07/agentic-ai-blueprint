@@ -1,0 +1,9 @@
+flowchart TD
+  Page[Authorized page and published criteria] --> Gate{Model transfer allowed?}
+  Gate -->|No| Manual[Human fact review]
+  Gate -->|Yes| Extract[Versioned extraction prompt]
+  Extract --> Schema[Validate schema and exact quotes]
+  Schema -->|Valid| Proposals[Unaccepted proposals]
+  Schema -->|Invalid| Failure[Explicit failure; no facts written]
+  Proposals --> Manual
+  Manual --> Facts[Append reviewed fact]

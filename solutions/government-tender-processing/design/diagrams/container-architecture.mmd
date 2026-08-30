@@ -1,0 +1,8 @@
+flowchart LR
+  Browser[Same-origin portal] --> FastAPI[Authenticated FastAPI]
+  FastAPI --> Policy[Deterministic policy engine]
+  FastAPI --> Parser[Digital PDF parser]
+  FastAPI --> DB[(PostgreSQL)]
+  FastAPI -. Optional .-> LLM[Provider adapter]
+  Policy --> DB
+  Parser --> DB

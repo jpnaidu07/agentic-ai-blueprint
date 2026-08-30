@@ -3,7 +3,8 @@ Deterministic Safety Guardrails and Pre/Post-Flight Validators.
 """
 
 import re
-from typing import Dict, Any, Tuple, Optional
+from typing import Any, Dict, Optional, Tuple
+
 from pydantic import BaseModel
 
 DANGEROUS_PATTERNS = [
@@ -17,15 +18,25 @@ DANGEROUS_PATTERNS = [
 ]
 
 SECRET_PATTERNS = [
-    (r"(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['\"]?([^\s'\"]+)['\"]?", r"\1: [REDACTED_SECRET]"),
-    (r"\b(ghp_[a-zA-Z0-9]{36}|sk-[a-zA-Z0-9]{48})\b", "[REDACTED_TOKEN]")
+    (
+        r"(?i)(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*['\"]?([^\s'\"]+)['\"]?",
+        r"\1: [REDACTED_SECRET]",
+    ),
+    (
+        r"\b(?:gh[pousr]_[a-zA-Z0-9]{20,255}|github_pat_[a-zA-Z0-9_]{20,255}|sk-(?:proj-)?[a-zA-Z0-9_-]{20,255})\b",
+        "[REDACTED_TOKEN]",
+    ),
 ]
 
+
 class GuardrailResult:
-    def __init__(self, is_safe: bool, sanitized_content: str, violation_reason: Optional[str] = None):
+    def __init__(
+        self, is_safe: bool, sanitized_content: str, violation_reason: Optional[str] = None
+    ):
         self.is_safe = is_safe
         self.sanitized_content = sanitized_content
         self.violation_reason = violation_reason
+
 
 class AgentGuardrails:
     @staticmethod
@@ -45,12 +56,14 @@ class AgentGuardrails:
                     return GuardrailResult(
                         is_safe=False,
                         sanitized_content=command,
-                        violation_reason=f"Dangerous command pattern detected: '{pattern}'. Destructive actions blocked without simulated dry-run verification."
+                        violation_reason=f"Dangerous command pattern detected: '{pattern}'. Destructive actions blocked without simulated dry-run verification.",
                     )
         return GuardrailResult(is_safe=True, sanitized_content=command)
 
     @staticmethod
-    def validate_tool_args(schema_class: type[BaseModel], args: Dict[str, Any]) -> Tuple[bool, Optional[BaseModel], Optional[str]]:
+    def validate_tool_args(
+        schema_class: type[BaseModel], args: Dict[str, Any]
+    ) -> Tuple[bool, Optional[BaseModel], Optional[str]]:
         """Type-validates tool arguments against a Pydantic schema."""
         try:
             validated = schema_class(**args)

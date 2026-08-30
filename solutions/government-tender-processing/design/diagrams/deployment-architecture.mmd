@@ -1,0 +1,8 @@
+flowchart LR
+  Laptop[Windows or Linux developer] --> Loopback[Loopback port 8000]
+  Loopback --> App[Non-root app container: 2 GiB]
+  App --> DB[(PostgreSQL container: 2 GiB)]
+  DB --> Volume[Persistent named volume]
+  App -. Cloud default when configured .-> Cloud[Approved HTTPS provider]
+  App -. Opt-in local-ai profile .-> Ollama[Ollama: 8 GiB cap]
+  Dev[Python-only alternative] --> SQLite[(Temporary or local SQLite)]

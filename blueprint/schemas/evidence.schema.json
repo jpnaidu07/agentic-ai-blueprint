@@ -1,0 +1,80 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "criterion_id": {
+      "pattern": "^[A-Z][A-Z0-9-]{1,39}$",
+      "title": "Criterion Id",
+      "type": "string"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "maximum": 1000000000000000.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+          "type": "string"
+        }
+      ],
+      "title": "Value"
+    },
+    "document_id": {
+      "pattern": "^[a-f0-9]{32}$",
+      "title": "Document Id",
+      "type": "string"
+    },
+    "page": {
+      "maximum": 250,
+      "minimum": 1,
+      "title": "Page",
+      "type": "integer"
+    },
+    "quote": {
+      "maxLength": 4000,
+      "minLength": 3,
+      "title": "Quote",
+      "type": "string"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "origin": {
+      "enum": [
+        "human",
+        "model"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "producer": {
+      "maxLength": 200,
+      "minLength": 2,
+      "title": "Producer",
+      "type": "string"
+    },
+    "review_note": {
+      "maxLength": 2000,
+      "minLength": 10,
+      "title": "Review Note",
+      "type": "string"
+    }
+  },
+  "required": [
+    "criterion_id",
+    "value",
+    "document_id",
+    "page",
+    "quote",
+    "confidence",
+    "origin",
+    "producer",
+    "review_note"
+  ],
+  "title": "FactInput",
+  "type": "object"
+}

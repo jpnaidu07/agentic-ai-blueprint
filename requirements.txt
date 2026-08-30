@@ -1,20 +1,12 @@
-# Core Agent & API Dependencies
-fastapi>=0.115.0
-uvicorn>=0.30.0
-pydantic>=2.8.0
-requests>=2.32.0
-python-dotenv>=1.0.0
-sse-starlette>=2.1.0
-
-# LLM & Embeddings
-httpx>=0.27.0
-numpy>=1.26.0
-
-# Testing & Evals
-pytest>=8.3.0
-pytest-asyncio>=0.24.0
-
-# Monitoring & Utilities
-colorama>=0.4.6
-pyyaml>=6.0.2
-rich>=13.8.0
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.13.5
+httpx==0.28.1
+python-dotenv==1.2.3
+python-multipart==0.0.32
+PyYAML==6.0.3
+jsonschema==4.26.0
+SQLAlchemy==2.0.52
+psycopg[binary]==3.3.4
+pypdf==6.16.2
+requests==2.34.2

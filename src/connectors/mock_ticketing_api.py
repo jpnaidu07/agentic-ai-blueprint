@@ -5,8 +5,10 @@ Enforces SHA-256 idempotency verification to prevent duplicate incident dispatch
 
 import hashlib
 import time
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, Field
+
 
 class ServiceTicketRequest(BaseModel):
     server_id: str
@@ -16,6 +18,7 @@ class ServiceTicketRequest(BaseModel):
     description: Optional[str] = None
     idempotency_key: Optional[str] = None
 
+
 class ServiceTicketResponse(BaseModel):
     ticket_id: str
     server_id: str
@@ -23,6 +26,7 @@ class ServiceTicketResponse(BaseModel):
     status: str
     idempotent_cached: bool
     created_at: float
+
 
 class MockTicketingService:
     def __init__(self):
@@ -33,9 +37,12 @@ class MockTicketingService:
     def create_ticket(self, request: ServiceTicketRequest) -> ServiceTicketResponse:
         # Calculate or use provided idempotency key
         hour_window = int(time.time() // 3600)
-        idem_key = request.idempotency_key or hashlib.sha256(
-            f"{request.server_id}:{request.component}:{request.priority}:{hour_window}".encode()
-        ).hexdigest()
+        idem_key = (
+            request.idempotency_key
+            or hashlib.sha256(
+                f"{request.server_id}:{request.component}:{request.priority}:{hour_window}".encode()
+            ).hexdigest()
+        )
 
         # Check if already created
         if idem_key in self.idempotency_index:
@@ -47,7 +54,7 @@ class MockTicketingService:
                 component=existing["component"],
                 status=existing["status"],
                 idempotent_cached=True,
-                created_at=existing["created_at"]
+                created_at=existing["created_at"],
             )
 
         # Create new ticket
@@ -60,7 +67,7 @@ class MockTicketingService:
             "priority": request.priority,
             "runbook_id": request.runbook_id,
             "status": "DISPATCHED",
-            "created_at": time.time()
+            "created_at": time.time(),
         }
         self.ticket_store[ticket_id] = ticket_record
         self.idempotency_index[idem_key] = ticket_id
@@ -71,10 +78,12 @@ class MockTicketingService:
             component=request.component,
             status="DISPATCHED",
             idempotent_cached=False,
-            created_at=ticket_record["created_at"]
+            created_at=ticket_record["created_at"],
         )
 
+
 _ticketing_service_instance = MockTicketingService()
+
 
 def get_ticketing_service() -> MockTicketingService:
     return _ticketing_service_instance

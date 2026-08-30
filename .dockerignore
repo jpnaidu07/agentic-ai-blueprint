@@ -1,0 +1,15 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+.local-credentials.txt
+data
+storage
+reports
+*.sqlite*
+*.db
+__pycache__
+.pytest_cache
+.ruff_cache
+node_modules

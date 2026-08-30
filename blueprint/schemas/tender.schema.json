@@ -1,0 +1,129 @@
+{
+  "$defs": {
+    "Criterion": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Z][A-Z0-9-]{1,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 1000,
+          "minLength": 5,
+          "title": "Description",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "eligibility",
+            "technical",
+            "commercial",
+            "experience",
+            "delivery",
+            "risk"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "method": {
+          "enum": [
+            "at_least",
+            "at_most",
+            "higher",
+            "lower"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "maximum": 1000000000000000.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Target"
+        },
+        "weight": {
+          "anyOf": [
+            {
+              "maximum": 100.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            }
+          ],
+          "title": "Weight"
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "category",
+        "method",
+        "target",
+        "weight"
+      ],
+      "title": "Criterion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "pattern": "^[A-Z][A-Z0-9-]{2,63}$",
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 5,
+      "title": "Title",
+      "type": "string"
+    },
+    "agency": {
+      "maxLength": 200,
+      "minLength": 2,
+      "title": "Agency",
+      "type": "string"
+    },
+    "closing_date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Closing Date",
+      "type": "string"
+    },
+    "currency": {
+      "pattern": "^[A-Z]{3}$",
+      "title": "Currency",
+      "type": "string"
+    },
+    "criteria": {
+      "items": {
+        "$ref": "#/$defs/Criterion"
+      },
+      "maxItems": 40,
+      "minItems": 2,
+      "title": "Criteria",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "agency",
+    "closing_date",
+    "currency",
+    "criteria"
+  ],
+  "title": "TenderInput",
+  "type": "object"
+}

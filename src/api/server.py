@@ -1,163 +1,180 @@
-"""
-FastAPI Server for Enterprise Agentic AI Platform.
-Provides REST APIs, SSE real-time thought trace streaming, problem runners, and UI hosting.
-"""
+"""Same-origin development API with authenticated resources and isolated demo routes."""
 
-import os
 import json
+import logging
+import os
 import time
-import asyncio
-from typing import Dict, Any, Optional
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from src.agent.orchestrator import AgentOrchestrator
-from src.agent.llm_client import LLMClient
-from src.connectors.mock_ome_api import MOCK_FLEET_DB, MockRedfishClient
-from src.evals.eval_harness import run_evaluation_benchmark
-from src.tools.mcp_server import MCPServer
-from src.solutions.problem1_disk_health.brute_force import run_disk_triage_brute_force
-from src.solutions.problem1_disk_health.improved_agent import run_disk_triage_improved
-from src.solutions.problem2_patch_automation.brute_force import run_patch_automation_brute_force
-from src.solutions.problem2_patch_automation.improved_agent import run_patch_automation_improved
-from src.solutions.problem3_log_triage.brute_force import run_log_triage_brute_force
-from src.solutions.problem3_log_triage.improved_agent import run_log_triage_improved
+from src.tender.api import router
+from src.tender.security import authenticate
+from src.tender.store import Store
 
-app = FastAPI(title="Agentic AI Blueprint API", version="1.0.0")
+load_dotenv()
+logger = logging.getLogger("blueprint.requests")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-# Mount static UI files
-UI_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui")
-if os.path.exists(UI_DIR):
-    app.mount("/static", StaticFiles(directory=UI_DIR), name="static")
+class BodyLimit:
+    """Bound request bodies before multipart parsing or file spooling."""
 
-@app.get("/", response_class=HTMLResponse)
-async def serve_dashboard():
-    index_path = os.path.join(UI_DIR, "index.html")
-    if os.path.exists(index_path):
-        with open(index_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-    return HTMLResponse("<h1>Agentic AI Blueprint Server Running</h1>")
+    def __init__(self, app, limit=11 * 1024 * 1024):
+        self.app, self.limit = app, limit
 
-@app.get("/api/health")
-async def health_check():
-    client = LLMClient()
-    return {
-        "status": "HEALTHY",
-        "system": "Dell PowerEdge / Polaris Agent Runtime",
-        "target_hardware": "Intel Core Ultra 9 285H, 32GB RAM, Intel Arc 140T GPU (16GB)",
-        "active_llm_provider": client.active_provider,
-        "active_model": client.model,
-        "mcp_tools_registered": len(MCPServer.list_tools())
-    }
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}:
+            return await self.app(scope, receive, send)
+        messages, size = [], 0
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            size += len(message.get("body", b""))
+            if size > self.limit:
+                return await JSONResponse({"detail": "Request exceeds 11 MiB"}, 413)(
+                    scope, receive, send
+                )
+            messages.append(message)
+            if not message.get("more_body", False):
+                break
+        iterator = iter(messages)
 
-class ProblemRunRequest(BaseModel):
-    problem_id: str  # P1, P2, P3
-    mode: str = "improved"  # brute_force or improved
-    target_id: Optional[str] = None
+        async def replay():
+            try:
+                return next(iterator)
+            except StopIteration:
+                return await receive()
 
-@app.post("/api/problems/run")
-async def run_problem(req: ProblemRunRequest):
-    if req.problem_id == "P1":
-        if req.mode == "brute_force":
-            res = run_disk_triage_brute_force("ALERT: SMART threshold exceeded on SV-10492 Drive bay 2")
-        else:
-            res = run_disk_triage_improved(req.target_id or "SV-10492")
-        return res
+        await self.app(scope, replay, send)
 
-    elif req.problem_id == "P2":
-        if req.mode == "brute_force":
-            res = run_patch_automation_brute_force("inventory.csv")
-        else:
-            res = run_patch_automation_improved(req.target_id or "CL-PROD-01")
-        return res
 
-    elif req.problem_id == "P3":
-        if req.mode == "brute_force":
-            res = run_log_triage_brute_force("sample raw logs")
-        else:
-            res = run_log_triage_improved(req.target_id or "INC-LOG-992")
-        return res
+def create_app(database_url=None, scanner=None):
+    @asynccontextmanager
+    async def lifespan(app):
+        url = database_url or os.getenv("DATABASE_URL", "sqlite:///data/tender.sqlite")
+        if url == "sqlite:///data/tender.sqlite":
+            Path("data").mkdir(exist_ok=True)
+        app.state.tender_store = Store(url)
+        app.state.malware_scanner = scanner
+        yield
+        app.state.tender_store.engine.dispose()
 
-    return JSONResponse(status_code=400, content={"error": "Invalid problem_id. Use P1, P2, or P3."})
-
-@app.get("/api/agent/stream")
-async def stream_agent(prompt: str, task_id: str = "TASK-STREAM-01"):
-    """Server-Sent Events (SSE) stream for real-time Thought, Action, Observation, and Synthesis."""
-    orchestrator = AgentOrchestrator()
-
-    async def event_generator():
-        for event in orchestrator.run_stream(user_prompt=prompt, task_id=task_id):
-            payload = json.dumps(event.to_dict())
-            yield f"data: {payload}\n\n"
-            await asyncio.sleep(0.05)
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-@app.get("/api/telemetry/fleet")
-async def get_fleet_telemetry():
-    """Returns mock Dell OME fleet nodes and drive health status."""
-    nodes = []
-    for k, v in MOCK_FLEET_DB.items():
-        nodes.append({
-            "server_id": v.server_id,
-            "model": v.model,
-            "chassis_id": v.chassis_id,
-            "power_state": v.power_state,
-            "running_vms": v.running_vms_count,
-            "drives_count": len(v.drives),
-            "critical_drives": sum(1 for d in v.drives if d.health_status == "Critical" or d.reallocated_sector_count > 50)
-        })
-    return {"total_servers_simulated": len(nodes), "nodes": nodes}
-
-@app.get("/api/evals/benchmark")
-async def get_benchmark_scorecard():
-    """Runs and returns the live evaluation scorecard."""
-    scorecard = run_evaluation_benchmark()
-    return scorecard
-
-@app.post("/api/mcp/call")
-async def mcp_call(request: Request):
-    body = await request.json()
-    tool_name = body.get("name")
-    arguments = body.get("arguments", {})
-    res = MCPServer.call_tool(tool_name, arguments)
-    return res
-
-from src.connectors.slack_discord_connector import SlackDiscordConnector, SlackCommandRequest, DiscordWebhookPayload
-
-@app.post("/api/integrations/slack/events")
-async def slack_slash_command(request: Request):
-    """Handles incoming Slack slash commands (e.g. /triage SV-10492, /patch CL-PROD-01)."""
-    form_data = await request.form()
-    cmd_req = SlackCommandRequest(
-        command=form_data.get("command", "/triage"),
-        text=form_data.get("text", "SV-10492"),
-        user_name=form_data.get("user_name", "operator"),
-        channel_id=form_data.get("channel_id", "C01234567")
+    app = FastAPI(
+        title="Agentic AI Blueprint — Tender Reference", version="0.2.0", lifespan=lifespan
     )
-    return SlackDiscordConnector.handle_slack_slash_command(cmd_req)
+    app.add_middleware(BodyLimit)
+    app.include_router(router)
+    ui_dir = Path(__file__).resolve().parents[1] / "tender" / "ui"
+    if ui_dir.is_dir():
+        app.mount("/static", StaticFiles(directory=ui_dir), name="static")
 
-@app.post("/api/integrations/discord/webhook")
-async def discord_webhook(payload: DiscordWebhookPayload):
-    """Simulates sending an alert to a Discord operational webhook."""
-    return SlackDiscordConnector.format_discord_notification(
-        title="Fleet Telemetry Alert",
-        description=payload.content
-    )
+    @app.middleware("http")
+    async def request_metadata(request: Request, call_next):
+        request_id = uuid.uuid4().hex
+        start = time.perf_counter()
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+        )
+        # No query strings, tokens, filenames, prompts, evidence or request/response bodies.
+        route = request.scope.get("route")
+        logger.info(
+            json.dumps(
+                {
+                    "request_id": request_id,
+                    "route": getattr(route, "path", "unmatched"),
+                    "status": response.status_code,
+                    "duration_ms": round((time.perf_counter() - start) * 1000, 2),
+                }
+            )
+        )
+        return response
+
+    @app.get("/", response_class=HTMLResponse)
+    def dashboard():
+        return (ui_dir / "index.html").read_text(encoding="utf-8")
+
+    @app.get("/api/health")
+    def health():
+        return {
+            "status": "ok",
+            "mode": "development-reference",
+            "llm_provider": os.getenv("LLM_PROVIDER", "openai"),
+            "llm_configured": bool(os.getenv("LLM_MODEL")),
+            "live_provider_verified": False,
+        }
+
+    @app.get("/api/me")
+    def me(principal=Depends(authenticate)):
+        return {
+            "user_id": principal.user_id,
+            "role": principal.role,
+            "tender_ids": principal.tender_ids,
+        }
+
+    def demo_access(principal=Depends(authenticate)):
+        principal.authorize(roles={"admin", "evaluator"})
+        if os.getenv("ENABLE_DEMO_ROUTES", "false").lower() != "true":
+            raise HTTPException(404, "Infrastructure simulation routes are disabled")
+        return principal
+
+    class ProblemRequest(BaseModel):
+        problem_id: str = Field(pattern="^P[123]$")
+        mode: str = Field(default="improved", pattern="^(brute_force|improved)$")
+        target_id: str | None = Field(default=None, max_length=80)
+
+    @app.post("/api/problems/run", dependencies=[Depends(demo_access)])
+    def run_problem(body: ProblemRequest):
+        from src.solutions.problem1_disk_health.improved_agent import run_disk_triage_improved
+        from src.solutions.problem2_patch_automation.improved_agent import (
+            run_patch_automation_improved,
+        )
+        from src.solutions.problem3_log_triage.improved_agent import run_log_triage_improved
+
+        if body.mode != "improved":
+            raise HTTPException(422, "Brute-force baselines are CLI-only educational examples")
+        runners = {
+            "P1": (run_disk_triage_improved, "SV-10492"),
+            "P2": (run_patch_automation_improved, "CL-PROD-01"),
+            "P3": (run_log_triage_improved, "INC-LOG-992"),
+        }
+        run, target = runners[body.problem_id]
+        return run(body.target_id or target)
+
+    class StreamRequest(BaseModel):
+        prompt: str = Field(min_length=3, max_length=10000)
+
+    @app.post("/api/agent/stream", dependencies=[Depends(demo_access)])
+    def stream(body: StreamRequest):
+        from src.agent.llm_client import LLMClient
+        from src.agent.orchestrator import AgentOrchestrator
+
+        # This route is explicitly a simulation; it cannot reach live provider/tool accounts.
+        orchestrator = AgentOrchestrator(LLMClient(provider="mock"))
+
+        def events():
+            for event in orchestrator.run_stream(body.prompt, task_id=uuid.uuid4().hex):
+                yield "data: " + json.dumps(event.to_dict()) + "\n\n"
+
+        # A synchronous iterator runs in Starlette's threadpool, not the event loop.
+        return StreamingResponse(events(), media_type="text/event-stream")
+
+    return app
+
+
+app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting Enterprise Agentic AI Platform on http://localhost:8000")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
+    uvicorn.run("src.api.server:app", host=os.getenv("BIND_HOST", "127.0.0.1"), port=8000)

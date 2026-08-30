@@ -1,0 +1,7 @@
+flowchart LR
+  Admin[Procurement administrator] --> API[Tender platform]
+  Evaluator[Evidence evaluator] --> API
+  Committee[Independent committee] --> API
+  Auditor[Scoped auditor] --> API
+  API -. Opt-in page extraction .-> Provider[Approved model provider]
+  API --> Records[Evidence and audit records]

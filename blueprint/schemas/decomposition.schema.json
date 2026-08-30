@@ -1,0 +1,146 @@
+{
+  "$defs": {
+    "Task": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Z][A-Z0-9-]{1,79}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "parent_capability": {
+          "title": "Parent Capability",
+          "type": "string"
+        },
+        "objective": {
+          "title": "Objective",
+          "type": "string"
+        },
+        "skill": {
+          "title": "Skill",
+          "type": "string"
+        },
+        "dependencies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "inputs": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Inputs",
+          "type": "array"
+        },
+        "outputs": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Outputs",
+          "type": "array"
+        },
+        "affected_modules": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Affected Modules",
+          "type": "array"
+        },
+        "api_contract": {
+          "title": "Api Contract",
+          "type": "string"
+        },
+        "data_contract": {
+          "title": "Data Contract",
+          "type": "string"
+        },
+        "agent_tools": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Agent Tools",
+          "type": "array"
+        },
+        "instructions": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Instructions",
+          "type": "array"
+        },
+        "tests": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Tests",
+          "type": "array"
+        },
+        "definition_of_done": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Definition Of Done",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "parent_capability",
+        "objective",
+        "skill",
+        "dependencies",
+        "inputs",
+        "outputs",
+        "affected_modules",
+        "api_contract",
+        "data_contract",
+        "agent_tools",
+        "instructions",
+        "tests",
+        "definition_of_done"
+      ],
+      "title": "Task",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "solution": {
+      "title": "Solution",
+      "type": "string"
+    },
+    "design_digest": {
+      "title": "Design Digest",
+      "type": "string"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/$defs/Task"
+      },
+      "minItems": 1,
+      "title": "Tasks",
+      "type": "array"
+    }
+  },
+  "required": [
+    "solution",
+    "design_digest",
+    "tasks"
+  ],
+  "title": "Decomposition",
+  "type": "object"
+}

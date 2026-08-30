@@ -4,16 +4,21 @@ Enables bidirectional Agent interaction via Slack slash commands and Discord cha
 """
 
 import time
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 from pydantic import BaseModel
+
+from src.agent.llm_client import LLMClient
 from src.agent.orchestrator import AgentOrchestrator
+
 
 class SlackCommandRequest(BaseModel):
     command: str  # e.g., "/triage", "/patch", "/rca"
-    text: str     # arguments, e.g. "SV-10492"
+    text: str  # arguments, e.g. "SV-10492"
     user_name: str
     channel_id: str
     response_url: Optional[str] = None
+
 
 class DiscordWebhookPayload(BaseModel):
     content: str
@@ -21,13 +26,14 @@ class DiscordWebhookPayload(BaseModel):
     avatar_url: Optional[str] = "https://img.icons8.com/color/96/bot.png"
     embeds: Optional[list] = None
 
+
 class SlackDiscordConnector:
     @staticmethod
     def handle_slack_slash_command(req: SlackCommandRequest) -> Dict[str, Any]:
         """Processes incoming Slack slash commands and triggers agent execution."""
         cmd = req.command.lower()
         arg = req.text.strip()
-        orchestrator = AgentOrchestrator()
+        orchestrator = AgentOrchestrator(LLMClient(provider="mock"))
 
         if "/triage" in cmd or "triage" in arg.lower():
             target_server = arg if arg else "SV-10492"
@@ -43,7 +49,10 @@ class SlackDiscordConnector:
             task_id = f"SLACK-RCA-{int(time.time())}"
 
         events = list(orchestrator.run_stream(user_prompt=prompt, task_id=task_id))
-        synthesis = next((e.data.get("response") for e in reversed(events) if e.event_type == "SYNTHESIS"), "Execution completed.")
+        synthesis = next(
+            (e.data.get("response") for e in reversed(events) if e.event_type == "SYNTHESIS"),
+            "Execution completed.",
+        )
 
         # Return Slack Block Kit compatible payload
         return {
@@ -54,21 +63,17 @@ class SlackDiscordConnector:
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"⚡ *Command Triggered*: `{req.command} {req.text}`\n*Task ID*: `{task_id}`"
-                    }
+                        "text": f"⚡ *Command Triggered*: `{req.command} {req.text}`\n*Task ID*: `{task_id}`",
+                    },
                 },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"```\n{synthesis}\n```"
-                    }
-                }
-            ]
+                {"type": "section", "text": {"type": "mrkdwn", "text": f"```\n{synthesis}\n```"}},
+            ],
         }
 
     @staticmethod
-    def format_discord_notification(title: str, description: str, color_hex: int = 0x00F0FF) -> Dict[str, Any]:
+    def format_discord_notification(
+        title: str, description: str, color_hex: int = 0x00F0FF
+    ) -> Dict[str, Any]:
         """Formats an outgoing alert embed for Discord channel webhooks."""
         return {
             "username": "Enterprise Agentic Bot",
@@ -77,10 +82,8 @@ class SlackDiscordConnector:
                     "title": f"🚨 {title}",
                     "description": description,
                     "color": color_hex,
-                    "footer": {
-                        "text": "Enterprise Agentic AI Blueprint • Dell OME Modernization"
-                    },
-                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                    "footer": {"text": "Enterprise Agentic AI Blueprint • Dell OME Modernization"},
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 }
-            ]
+            ],
         }

@@ -3,8 +3,10 @@ Mock Dell OpenManage Enterprise (OME) & Redfish REST API Server / Connector.
 Simulates fleet inventory (up to 100k nodes), telemetry, and drive SMART metrics.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel
+
 
 class RedfishDriveTelemetry(BaseModel):
     drive_id: str
@@ -20,6 +22,7 @@ class RedfishDriveTelemetry(BaseModel):
     temperature_celsius: int
     firmware_version: str
 
+
 class RedfishServer(BaseModel):
     server_id: str
     model: str  # e.g., PowerEdge R750, PowerEdge MX740c
@@ -29,6 +32,7 @@ class RedfishServer(BaseModel):
     idrac_version: str
     drives: List[RedfishDriveTelemetry]
     running_vms_count: int
+
 
 # In-memory mock database of fleet servers
 MOCK_FLEET_DB: Dict[str, RedfishServer] = {
@@ -53,7 +57,7 @@ MOCK_FLEET_DB: Dict[str, RedfishServer] = {
                 reallocated_sector_count=0,
                 reported_uncorrectable_errors=0,
                 temperature_celsius=34,
-                firmware_version="D3N2"
+                firmware_version="D3N2",
             ),
             RedfishDriveTelemetry(
                 drive_id="Drive.0:1:2",
@@ -67,9 +71,9 @@ MOCK_FLEET_DB: Dict[str, RedfishServer] = {
                 reallocated_sector_count=184,
                 reported_uncorrectable_errors=24,
                 temperature_celsius=48,
-                firmware_version="D3N2"
-            )
-        ]
+                firmware_version="D3N2",
+            ),
+        ],
     ),
     "SV-CANARY-01": RedfishServer(
         server_id="SV-CANARY-01",
@@ -79,7 +83,7 @@ MOCK_FLEET_DB: Dict[str, RedfishServer] = {
         bios_version="2.12.0",
         idrac_version="5.10.10.00",
         running_vms_count=0,  # Drained
-        drives=[]
+        drives=[],
     ),
     "SV-STG-01": RedfishServer(
         server_id="SV-STG-01",
@@ -89,7 +93,7 @@ MOCK_FLEET_DB: Dict[str, RedfishServer] = {
         bios_version="2.12.0",
         idrac_version="5.10.10.00",
         running_vms_count=4,
-        drives=[]
+        drives=[],
     ),
     "SV-PROD-01": RedfishServer(
         server_id="SV-PROD-01",
@@ -99,9 +103,10 @@ MOCK_FLEET_DB: Dict[str, RedfishServer] = {
         bios_version="2.10.1",
         idrac_version="5.00.00.00",
         running_vms_count=12,
-        drives=[]
-    )
+        drives=[],
+    ),
 }
+
 
 class MockRedfishClient:
     @staticmethod
@@ -113,17 +118,29 @@ class MockRedfishClient:
             "server_id": server.server_id,
             "model": server.model,
             "chassis_id": server.chassis_id,
-            "drives": [d.model_dump() for d in server.drives]
+            "drives": [d.model_dump() for d in server.drives],
         }
 
     @staticmethod
     def get_cluster_topology(cluster_id: str) -> Dict[str, Any]:
+        if cluster_id != "CL-PROD-01":
+            raise ValueError("Unknown demonstration cluster")
         return {
             "cluster_id": cluster_id,
             "chassis": ["MX7000-CH-01", "RACK-CH-02"],
             "nodes": [
-                {"server_id": "SV-CANARY-01", "chassis": "MX7000-CH-01", "tier": "canary", "vms": 0},
+                {
+                    "server_id": "SV-CANARY-01",
+                    "chassis": "MX7000-CH-01",
+                    "tier": "canary",
+                    "vms": 0,
+                },
                 {"server_id": "SV-STG-01", "chassis": "MX7000-CH-01", "tier": "staging", "vms": 4},
-                {"server_id": "SV-PROD-01", "chassis": "RACK-CH-02", "tier": "production", "vms": 12}
-            ]
+                {
+                    "server_id": "SV-PROD-01",
+                    "chassis": "RACK-CH-02",
+                    "tier": "production",
+                    "vms": 12,
+                },
+            ],
         }

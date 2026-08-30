@@ -1,0 +1,217 @@
+{
+  "$defs": {
+    "Requirement": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Z][A-Z0-9-]{1,39}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "objective": {
+          "minLength": 10,
+          "title": "Objective",
+          "type": "string"
+        },
+        "acceptance": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Acceptance",
+          "type": "array"
+        },
+        "skill": {
+          "enum": [
+            "backend",
+            "frontend",
+            "agents",
+            "rag",
+            "infrastructure",
+            "security"
+          ],
+          "title": "Skill",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "objective",
+        "acceptance",
+        "skill"
+      ],
+      "title": "Requirement",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "name": {
+      "pattern": "^[a-z][a-z0-9-]{2,63}$",
+      "title": "Name",
+      "type": "string"
+    },
+    "title": {
+      "minLength": 5,
+      "title": "Title",
+      "type": "string"
+    },
+    "problem": {
+      "minLength": 20,
+      "title": "Problem",
+      "type": "string"
+    },
+    "objectives": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Objectives",
+      "type": "array"
+    },
+    "personas": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Personas",
+      "type": "array"
+    },
+    "journeys": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Journeys",
+      "type": "array"
+    },
+    "requirements": {
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      },
+      "minItems": 1,
+      "title": "Requirements",
+      "type": "array"
+    },
+    "business_rules": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Business Rules",
+      "type": "array"
+    },
+    "inputs": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Inputs",
+      "type": "array"
+    },
+    "outputs": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Outputs",
+      "type": "array"
+    },
+    "security": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Security",
+      "type": "array"
+    },
+    "compliance": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Compliance",
+      "type": "array"
+    },
+    "data_sensitivity": {
+      "minLength": 3,
+      "title": "Data Sensitivity",
+      "type": "string"
+    },
+    "scale": {
+      "minLength": 3,
+      "title": "Scale",
+      "type": "string"
+    },
+    "nonfunctional": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Nonfunctional",
+      "type": "array"
+    },
+    "human_approvals": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Human Approvals",
+      "type": "array"
+    },
+    "failures": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Failures",
+      "type": "array"
+    },
+    "deployment": {
+      "minLength": 3,
+      "title": "Deployment",
+      "type": "string"
+    },
+    "model_selection": {
+      "minLength": 10,
+      "title": "Model Selection",
+      "type": "string"
+    },
+    "open_questions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Open Questions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "title",
+    "problem",
+    "objectives",
+    "personas",
+    "journeys",
+    "requirements",
+    "business_rules",
+    "inputs",
+    "outputs",
+    "security",
+    "compliance",
+    "data_sensitivity",
+    "scale",
+    "nonfunctional",
+    "human_approvals",
+    "failures",
+    "deployment",
+    "model_selection"
+  ],
+  "title": "UseCase",
+  "type": "object"
+}

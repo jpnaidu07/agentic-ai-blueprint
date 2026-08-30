@@ -1,0 +1,112 @@
+# Government Tender Intelligence & Bid Evaluation Platform: Design
+
+Generated proposal. Review before approving implementation.
+
+## Schema Version
+
+```yaml
+1
+...
+```
+
+## Solution
+
+government-tender-processing
+
+## Capability Digest
+
+0f4f9ea5b1ace06bd4f88a108183471216db2a401465993f7fa0438659414ed1
+
+## Modules
+
+```yaml
+- number: 1
+  name: Purpose & Scope
+  decisions:
+  - Evaluation committees must inspect many technical and commercial PDF bids against
+    published criteria. Manual comparisons lose evidence provenance, consume time
+    and risk inconsistent decisions.
+  - Reduce document triage effort while retaining committee authority over procurement.
+  - Make every accepted fact, deterministic score and human decision reconstructible.
+  - 'Sensitivity: Confidential government procurement information; use synthetic documents
+    until controls are independently approved.'
+  - 'Scale: Reference target 100 tenders with up to 50 bids each; digital PDFs up
+    to 10 MiB and 250 pages. These are design targets, not validated capacity claims.'
+- number: 2
+  name: System Prompt Design
+  decisions:
+  - Version prompts; separate system policy from untrusted documents and tool output.
+  - Require schema-valid outputs and source citations; abstain on missing evidence.
+  - Model output cannot authorize tools, change business rules, or approve decisions.
+- number: 3
+  name: Choose LLM
+  decisions:
+  - Default to an explicitly configured cloud provider after residency approval; require
+    structured-output capability and evaluate extraction on golden evidence. Support
+    OpenAI, Azure, Anthropic and Gemini compatibility endpoints plus optional Ollama.
+    Do not hard-code a model, price, or benchmark claim.
+  - Select provider and exact model through environment configuration.
+  - Validate capabilities per model. Fail visibly; fallback must be explicitly configured
+    within the approved data boundary.
+- number: 4
+  name: Tools & Integrations
+  decisions:
+  - Register input/output schemas, roles, resource scope, authentication, timeout,
+    retry policy and errors.
+  - Only allowlisted tools; no generated shell commands. Mutations need idempotency
+    and authorization.
+- number: 5
+  name: Memory Systems
+  decisions:
+  - Relational records for business entities; page-aware chunks for retrieval; bytes
+    in file/object storage.
+  - Working state is per request. Persist workflow/audit state separately from optional
+    conversation memory.
+  - Embeddings are optional and never the authority for transactional facts.
+- number: 6
+  name: Orchestration
+  decisions:
+  - Validate input -> process -> verify evidence -> deterministic policy -> human
+    review.
+  - Persist state transitions transactionally, reject stale versions, bound retries
+    and runtime.
+  - Use durable queues and a graph engine only for justified asynchronous/parallel
+    work.
+- number: 7
+  name: User Interface
+  decisions:
+  - Derive screens and APIs from requirement IDs, personas and journeys.
+  - Expose evidence and unresolved questions alongside outcomes; never present model
+    text as an approved decision.
+- number: 8
+  name: Testing & Evaluation
+  decisions:
+  - Unit, API, isolation, invalid-input, concurrency, injection and workflow regression
+    tests.
+  - Version golden datasets; measure retrieval recall/precision, abstention, latency
+    and observed model usage.
+  - Separate offline deterministic checks from live model evaluations and human review.
+```
+
+## Tradeoffs
+
+```yaml
+- 'Proposed baseline: Python/FastAPI + relational SQL + same-origin browser UI; reuse
+  one language for API and document pipelines.'
+- PostgreSQL for concurrent development; SQLite for isolated tests. SQLAlchemy shares
+  query semantics.
+- A dedicated SPA, vector service, broker and object store add operational cost; select
+  them only when a capability requires them.
+- 'Deployment constraint: Docker Compose application plus PostgreSQL for development;
+  optional local Ollama. SQLite is supported for tests and a single-process local
+  demo.'
+```
+
+## Production Gates
+
+```yaml
+- Identity provider and secret rotation
+- TLS, encryption at rest and restore drill
+- Malware scanner and isolated parser workers
+- Load tests, data retention review and human sign-off
+```

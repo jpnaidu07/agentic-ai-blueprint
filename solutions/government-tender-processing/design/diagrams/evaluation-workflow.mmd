@@ -1,0 +1,11 @@
+flowchart TD
+  Lock[Lock tender revision] --> Facts[Load latest reviewed facts]
+  Facts --> Gate{Eligibility and evidence complete?}
+  Gate -->|No| Block[Ineligible or needs review; no rank]
+  Gate -->|Yes| Price[Lowest complete eligible commercial total]
+  Price --> Score[Decimal weighted scoring]
+  Score --> Snapshot[Store version and input digest]
+  Snapshot --> Committee{Independent reviewer; same revision?}
+  Committee -->|No| Reject[Reject stale or unauthorized decision]
+  Committee -->|Yes| Decision[Append human approval or rejection]
+  Decision --> Frozen[Approval freezes version; no automatic award]

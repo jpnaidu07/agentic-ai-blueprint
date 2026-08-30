@@ -1,0 +1,43 @@
+schema_version: 1
+name: service-request-routing
+title: Internal service request routing
+problem: Employees submit service requests to multiple queues, causing lost ownership and slow triage.
+objectives:
+  - Assign each request to an accountable team and retain the routing evidence.
+personas:
+  - Employee submits and tracks a request.
+  - Service operator reviews uncertain classifications.
+journeys:
+  - Employee submits a request; classifier proposes a queue; operator approves uncertainty; owner acknowledges.
+requirements:
+  - id: CAP-01
+    objective: Persist requests and route them only to an allowlisted team with an audit record.
+    skill: backend
+    acceptance:
+      - Unknown teams are rejected; retrying the same request does not duplicate it.
+  - id: CAP-02
+    objective: Show request status and routing evidence to the requester and assigned team.
+    skill: frontend
+    acceptance:
+      - Users cannot view requests belonging to another department.
+business_rules:
+  - The classifier proposes ownership but cannot change access permissions.
+inputs:
+  - Request text, requester identity and permitted department.
+outputs:
+  - Request ID, owning queue, explanation and review status.
+security:
+  - Authenticate callers and enforce department scope before retrieval.
+compliance:
+  - Retention and data residency must be agreed with the organisation before production.
+data_sensitivity: Internal employee support information.
+scale: Design target of 1000 requests per day; verify through load testing.
+nonfunctional:
+  - A routing failure leaves a recoverable request rather than dropping it.
+human_approvals:
+  - An operator confirms low-confidence routing and any ownership override.
+failures:
+  - Unavailable model, unknown queue, duplicate submission, or invalid identity.
+deployment: Local containers for development; production requires identity and retention review.
+model_selection: Propose a small cloud model only after measured routing quality and approved data handling; deterministic queue rules take precedence.
+open_questions: []

@@ -57,3 +57,17 @@ Thumbs.db
 # Logs
 logs/
 *.log
+
+# Local confidential data, receipts and generated outputs
+.env.*
+!.env.example
+.local-credentials.txt
+data/
+storage/
+reports/
+.ruff_cache/
+*.sqlite-shm
+*.sqlite-wal
+solutions/*/approval.json
+solutions/*/implementation/receipts/
+solutions/*/implementation/work-packages/

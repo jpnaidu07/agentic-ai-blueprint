@@ -22,7 +22,7 @@ graph TD
         IMP_Parser --> T1["Tool: Cross-Service Correlation"]
         T1 --> D1["Temporal Alignment (Kafka lag -> Postgres lock -> OME timeout)"]
         D1 --> IMP_Orch["ReAct RCA Orchestrator"]
-        IMP_Orch --> T2["Tool: ChromaDB Post-Mortem Search"]
+        IMP_Orch --> T2["Tool: local lexical fixture search"]
         T2 --> D2["Historical Incident Match (INC-4029: DB Connection Starvation)"]
         D2 --> IMP_Orch
         IMP_Orch --> T3["Tool: Reproducible Test & Fix Synthesizer"]
@@ -39,6 +39,6 @@ graph TD
 | :--- | :--- | :--- |
 | **Context Window Handling** | Ingests raw logs; exceeds token limit | Semantic chunking & error clustering (90% token reduction) |
 | **Cross-Service Correlation**| Evaluates services in isolation | Temporal alignment across Kafka, PostgreSQL, and OME API |
-| **Historical Grounding** | None | ChromaDB vector search over past post-mortems |
+| **Historical Grounding** | None | synthetic lexical matching |
 | **Actionable Fix** | Generic advice ("check DB") | Exact PostgreSQL connection pool tuning patch + test script |
 | **Confidence Scoring** | None | Calibrated score (0.0 to 1.0) with evidence citations |

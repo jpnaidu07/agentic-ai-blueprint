@@ -1,0 +1,9 @@
+flowchart LR
+  Query[Evidence query] --> ACL[Tender and bidder scope filter]
+  ACL --> BM25[BM25 lexical ranking]
+  ACL -. Extension .-> Embeddings[Approved embedding provider and index]
+  BM25 --> Results[Page-cited evidence]
+  Embeddings -. Rank fusion extension .-> Results
+  Results --> Empty{Evidence found?}
+  Empty -->|No| Abstain[Insufficient evidence]
+  Empty -->|Yes| Human[Human interpretation; no invented answer]

@@ -1,188 +1,197 @@
-"""
-LLM Client abstraction supporting Ollama, OpenAI-compatible APIs, and Deterministic Offline Mock.
-"""
+"""Configurable provider adapter. Provider failures never become simulated success."""
 
-import os
 import json
+import os
 import time
-import requests
-from typing import Dict, Any, List, Optional
+from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
+import httpx
+from jsonschema import validate
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class LLMError(RuntimeError):
+    """Safe error message, excluding provider bodies and credentials."""
+
+
+class ModelConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    provider: str = "openai"
+    model: str = ""
+    base_url: str = ""
+    api_key: str = Field(default="", repr=False)
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    top_p: float | None = Field(default=None, gt=0, le=1)
+    max_tokens: int = Field(default=2048, ge=1, le=65536)
+    context_window: int = Field(default=32768, ge=1024)
+    timeout: float = Field(default=30, gt=0, le=120)
+    retries: int = Field(default=1, ge=0, le=3)
+    structured_output: bool = False
+    tool_calling: bool = False
+    fallback_model: str = ""
+    embedding_model: str = ""
+    latency_preference: str = "balanced"
+    cost_preference: str = "balanced"
+
+    @model_validator(mode="after")
+    def check_budget(self):
+        if self.max_tokens >= self.context_window:
+            raise ValueError("Output budget must be smaller than the context window")
+        return self
+
+    @classmethod
+    def from_env(cls, **overrides):
+        values = {}
+        for key in cls.model_fields:
+            if (value := os.getenv(f"LLM_{key.upper()}")) not in (None, ""):
+                values[key] = value
+        values.setdefault("api_key", os.getenv("OPENAI_API_KEY", ""))
+        values.update({k: v for k, v in overrides.items() if v is not None})
+        return cls(**values)
+
+
+@dataclass
 class LLMResponse:
-    def __init__(self, content: str, tool_calls: Optional[List[Dict[str, Any]]] = None, raw_response: Any = None, latency_ms: float = 0.0):
-        self.content = content
-        self.tool_calls = tool_calls or []
-        self.raw_response = raw_response
-        self.latency_ms = latency_ms
+    content: str
+    tool_calls: list = field(default_factory=list)
+    raw_response: dict | None = None
+    latency_ms: float = 0
+    usage: dict = field(default_factory=dict)
+    model: str = ""
+    simulated: bool = False
+
 
 class LLMClient:
-    def __init__(self, provider: Optional[str] = None, model: Optional[str] = None, base_url: Optional[str] = None):
-        self.provider = provider or os.getenv("LLM_PROVIDER", "auto")
-        self.model = model or os.getenv("LLM_MODEL", "qwen2.5-coder:7b")
-        self.base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        self.api_key = os.getenv("OPENAI_API_KEY", "")
-        self._detect_runtime()
+    ENDPOINTS = {
+        "openai": "https://api.openai.com/v1",
+        "anthropic": "https://api.anthropic.com/v1",
+        "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "ollama": "http://localhost:11434/v1",
+    }
 
-    def _detect_runtime(self):
-        """Auto-detect if Ollama is accessible locally, else use deterministic mock."""
+    def __init__(self, provider=None, model=None, base_url=None, *, config=None, transport=None):
+        self.config = config or ModelConfig.from_env(
+            provider=provider, model=model, base_url=base_url
+        )
+        self.provider = self.active_provider = self.config.provider
+        self.model = self.config.model
+        self.transport = transport
         if self.provider == "mock":
-            self.active_provider = "mock"
+            self.model = "explicit-demo-fixture-v2"
             return
+        if self.provider not in {*self.ENDPOINTS, "azure", "openai-compatible"}:
+            raise ValueError("Unsupported LLM_PROVIDER; auto fallback has been removed")
+        if not self.model:
+            raise ValueError("Set LLM_MODEL to a model/deployment supported by your provider")
+        self.base_url = (self.config.base_url or self.ENDPOINTS.get(self.provider, "")).rstrip("/")
+        parsed = urlparse(self.base_url)
+        if (
+            not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("LLM_BASE_URL must be a credential-free API base URL")
+        if parsed.scheme != "https" and not (
+            parsed.scheme == "http"
+            and parsed.hostname in {"localhost", "127.0.0.1", "::1", "ollama"}
+        ):
+            raise ValueError("Remote provider endpoints require HTTPS")
+        if self.provider != "ollama" and not self.config.api_key:
+            raise ValueError(
+                "Set LLM_API_KEY externally; missing credentials cannot activate mock mode"
+            )
 
-        if self.provider in ["ollama", "auto"]:
-            try:
-                resp = requests.get(f"{self.base_url}/api/tags", timeout=1.0)
-                if resp.status_code == 200:
-                    self.active_provider = "ollama"
-                    return
-            except Exception:
-                pass
+    def chat(self, messages, tools=None, temperature=None, output_schema=None):
+        if self.provider == "anthropic" and output_schema:
+            raise ValueError(
+                "Anthropic compatibility ignores response_format; use a native structured-output adapter for extraction"
+            )
+        if self.provider == "mock":
+            if output_schema:
+                raise LLMError("Demo fixtures cannot perform document extraction")
+            from src.agent.simulation import simulate
 
-        if self.provider == "openai" and self.api_key:
-            self.active_provider = "openai"
-            return
-
-        self.active_provider = "mock"
-
-    def chat(self, messages: List[Dict[str, str]], tools: Optional[List[Dict[str, Any]]] = None, temperature: float = 0.1) -> LLMResponse:
-        start_time = time.time()
-        
-        if self.active_provider == "ollama":
-            return self._call_ollama(messages, tools, temperature, start_time)
-        elif self.active_provider == "openai":
-            return self._call_openai(messages, tools, temperature, start_time)
-        else:
-            return self._call_mock(messages, tools, start_time)
-
-    def _call_ollama(self, messages: List[Dict[str, str]], tools: Optional[List[Dict[str, Any]]], temperature: float, start_time: float) -> LLMResponse:
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "stream": False,
-            "options": {"temperature": temperature}
-        }
-        try:
-            resp = requests.post(f"{self.base_url}/api/chat", json=payload, timeout=30.0)
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data.get("message", {}).get("content", "")
-                latency = (time.time() - start_time) * 1000
-                return LLMResponse(content=content, raw_response=data, latency_ms=latency)
-        except Exception:
-            pass
-        return self._call_mock(messages, tools, start_time)
-
-    def _call_openai(self, messages: List[Dict[str, str]], tools: Optional[List[Dict[str, Any]]], temperature: float, start_time: float) -> LLMResponse:
-        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-        payload = {"model": self.model, "messages": messages, "temperature": temperature}
-        try:
-            resp = requests.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers, timeout=30.0)
-            if resp.status_code == 200:
-                data = resp.json()
-                content = data["choices"][0]["message"]["content"]
-                latency = (time.time() - start_time) * 1000
-                return LLMResponse(content=content, raw_response=data, latency_ms=latency)
-        except Exception:
-            pass
-        return self._call_mock(messages, tools, start_time)
-
-    def _call_mock(self, messages: List[Dict[str, str]], tools: Optional[List[Dict[str, Any]]], start_time: float) -> LLMResponse:
-        """Deterministic, intelligent mock generator for instant local testing and CI."""
-        all_text = " ".join([m["content"] for m in messages])
-        
-        # Disk Health Triage simulation
-        if "SV-10492" in all_text or "disk" in all_text.lower() or "smart" in all_text.lower():
-            if "redfish_query_storage" not in all_text:
-                content = (
-                    "Thought: The user requested a disk health triage. I must first query the Redfish storage endpoint "
-                    "for server SV-10492 to retrieve live SMART telemetry metrics.\n"
-                    "Action: redfish_query_storage(server_id='SV-10492')\n"
-                )
-            elif "rag_search_runbook" not in all_text:
-                content = (
-                    "Thought: The Redfish telemetry shows Drive 0:1:2 has 184 Reallocated Sectors (threshold: 50) and 24 Uncorrectable Errors. "
-                    "This indicates a critical predictive hardware failure. I will query the Dell hardware runbooks for the PERC H740P controller.\n"
-                    "Action: rag_search_runbook(query='PERC H740P disk replacement procedure')\n"
-                )
-            elif "submit_service_ticket" not in all_text:
-                content = (
-                    "Thought: Runbook KB-8821 confirms the PERC H740P controller supports hot-swapping under RAID 5. "
-                    "I will now submit an automated service ticket with priority CRITICAL and an idempotency key to prevent duplicates.\n"
-                    "Action: submit_service_ticket(server_id='SV-10492', component='Drive 0:1:2', priority='CRITICAL', runbook_id='KB-8821')\n"
-                )
-            else:
-                content = (
-                    "Synthesis: Disk health triage completed successfully.\n"
-                    "{\n"
-                    '  "server_id": "SV-10492",\n'
-                    '  "faulty_component": "Drive 0:1:2 (Dell 1.92TB SAS SSD)",\n'
-                    '  "smart_metrics": {"reallocated_sectors": 184, "uncorrectable_errors": 24, "wear_level_percent": 91},\n'
-                    '  "recommended_action": "Execute hot-swap replacement per Runbook KB-8821",\n'
-                    '  "ticket_id": "INC-772910",\n'
-                    '  "risk_level": "CRITICAL",\n'
-                    '  "status": "TICKET_DISPATCHED"\n'
-                    "}"
-                )
-        # Patch Automation simulation
-        elif "patch" in all_text.lower() or "firmware" in all_text.lower() or "rollout" in all_text.lower():
-            if "build_dependency_graph" not in all_text:
-                content = (
-                    "Thought: To ensure a zero-downtime firmware upgrade, I must first resolve the topological dependency graph across chassis, sleds, and hypervisors.\n"
-                    "Action: build_dependency_graph(cluster_id='CL-PROD-01')\n"
-                )
-            elif "generate_canary_stages" not in all_text:
-                content = (
-                    "Thought: The dependency graph confirms the Chassis CMC must be upgraded first, followed by compute sleds with VM evacuation. I will generate a 3-stage canary rollout.\n"
-                    "Action: generate_canary_stages(cluster_id='CL-PROD-01', canary_percent=10)\n"
-                )
-            elif "dry_run_validation" not in all_text:
-                content = (
-                    "Thought: Staging partitions defined. Now validating dry-run gates and generating rollback manifest.\n"
-                    "Action: dry_run_validation(cluster_id='CL-PROD-01')\n"
-                )
-            else:
-                content = (
-                    "Synthesis: Fleet patch rollout plan generated.\n"
-                    "{\n"
-                    '  "cluster_id": "CL-PROD-01",\n'
-                    '  "stages": [\n'
-                    '    {"stage": 1, "tier": "10% Canary", "servers": ["SV-CANARY-01"], "pre_flight": "VM_DRAIN_VERIFIED"},\n'
-                    '    {"stage": 2, "tier": "50% Staging", "servers": ["SV-STG-01", "SV-STG-02"], "pre_flight": "HEALTH_GATE_PASS"},\n'
-                    '    {"stage": 3, "tier": "100% Rollout", "servers": ["SV-PROD-01", "SV-PROD-02"], "pre_flight": "CANARY_STABLE"}\n'
-                    '  ],\n'
-                    '  "rollback_manifest_generated": true,\n'
-                    '  "status": "READY_FOR_EXECUTION"\n'
-                    "}"
-                )
-        # Log Triage simulation
-        else:
-            if "correlate_logs" not in all_text:
-                content = (
-                    "Thought: Multi-service error cascade detected. I will parse and correlate timestamp sequences across OME Core, Kafka, and PostgreSQL.\n"
-                    "Action: correlate_logs(incident_id='INC-LOG-992')\n"
-                )
-            elif "search_incident_kb" not in all_text:
-                content = (
-                    "Thought: Correlation proves PostgreSQL lock contention occurred at T-00:00:12, followed by Kafka consumer timeout at T-00:00:15. I will search ChromaDB for matching past incidents.\n"
-                    "Action: search_incident_kb(query='PostgreSQL lock wait timeout Kafka consumer lag')\n"
-                )
-            elif "synthesize_rca_report" not in all_text:
-                content = (
-                    "Thought: Incident KB matched INC-4029. I will synthesize the final RCA report and configuration patch.\n"
-                    "Action: synthesize_rca_report(incident_id='INC-LOG-992')\n"
-                )
-            else:
-                content = (
-                    "Synthesis: Root Cause Analysis completed.\n"
-                    "{\n"
-                    '  "root_cause": "PostgreSQL HikariCP connection starvation caused by unindexed bulk inventory device query",\n'
-                    '  "confidence_score": 0.94,\n'
-                    '  "matched_incident": "INC-4029",\n'
-                    '  "actionable_fix": "Apply database migration: CREATE INDEX idx_device_inventory_uuid ON devices(uuid); increase maximumPoolSize from 20 to 50 in application.yml",\n'
-                    '  "verification_script": "python -m src.tools.verify_db_pool --connections 50"\n'
-                    "}"
-                )
-
-        latency = (time.time() - start_time) * 1000 + 15.0
-        return LLMResponse(content=content, latency_ms=latency)
-
+            return simulate(messages)
+        if tools and not self.config.tool_calling:
+            raise ValueError("Enable LLM_TOOL_CALLING only after validating the selected model")
+        if output_schema and not self.config.structured_output:
+            raise ValueError("Enable LLM_STRUCTURED_OUTPUT only for a validated compatible model")
+        if (
+            len(json.dumps(messages).encode())
+            > (self.config.context_window - self.config.max_tokens) * 3
+        ):
+            raise ValueError("Input exceeds conservative configured context budget; chunk it first")
+        payload = {"model": self.model, "messages": messages}
+        payload[
+            "max_completion_tokens" if self.provider in {"openai", "azure"} else "max_tokens"
+        ] = self.config.max_tokens
+        temp = temperature if temperature is not None else self.config.temperature
+        if temp is not None:
+            payload["temperature"] = temp
+        if self.config.top_p is not None:
+            payload["top_p"] = self.config.top_p
+        if tools:
+            payload["tools"] = tools
+        if output_schema:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "result", "strict": True, "schema": output_schema},
+            }
+        headers = {"Authorization": f"Bearer {self.config.api_key}"}
+        if self.provider == "azure":
+            headers = {"api-key": self.config.api_key}
+        start = time.perf_counter()
+        models = [self.model] + ([self.config.fallback_model] if self.config.fallback_model else [])
+        with httpx.Client(
+            timeout=self.config.timeout, transport=self.transport, follow_redirects=False
+        ) as client:
+            for model in models:
+                payload["model"] = model
+                for attempt in range(self.config.retries + 1):
+                    try:
+                        response = client.post(
+                            f"{self.base_url}/chat/completions", json=payload, headers=headers
+                        )
+                    except (httpx.TimeoutException, httpx.NetworkError):
+                        response = None
+                    if response is not None and response.status_code not in {
+                        429,
+                        500,
+                        502,
+                        503,
+                        504,
+                    }:
+                        if response.status_code != 200:
+                            raise LLMError(f"Provider request failed (HTTP {response.status_code})")
+                        try:
+                            data = response.json()
+                            choice = data["choices"][0]
+                            message = choice["message"]
+                            if choice.get("finish_reason") in {
+                                "length",
+                                "content_filter",
+                            } or message.get("refusal"):
+                                raise LLMError("Provider refused or returned an incomplete result")
+                            content = message.get("content") or ""
+                            if output_schema:
+                                validate(json.loads(content), output_schema)
+                            return LLMResponse(
+                                content=content,
+                                tool_calls=message.get("tool_calls") or [],
+                                raw_response=data,
+                                usage=data.get("usage", {}),
+                                model=data.get("model", model),
+                                latency_ms=(time.perf_counter() - start) * 1000,
+                            )
+                        except LLMError:
+                            raise
+                        except Exception:
+                            raise LLMError(
+                                "Provider returned an invalid response or output schema"
+                            ) from None
+                    if attempt < self.config.retries:
+                        time.sleep(min(0.25 * 2**attempt, 2))
+        raise LLMError("Provider unavailable after bounded retries; no simulated answer produced")

@@ -21,7 +21,7 @@ graph TD
         IMP_Orch --> T1["Tool: Redfish Storage Querier"]
         T1 --> D1["Extract SMART Diffs (Reallocated Sectors, Wear Level)"]
         D1 --> IMP_Orch
-        IMP_Orch --> T2["Tool: ChromaDB RAG (Dell PowerEdge Runbooks)"]
+        IMP_Orch --> T2["Tool: local lexical retrieval fixture (Dell PowerEdge Runbooks)"]
         T2 --> D2["Exact Hot-Swap Runbook (KB-8821)"]
         D2 --> IMP_Orch
         IMP_Orch --> T3["Tool: Idempotent Ticket Creator"]
@@ -38,7 +38,7 @@ graph TD
 | :--- | :--- | :--- |
 | **API Integration** | None (assumes raw prompt text) | Real Redfish REST API queries (`/Storage/Drives`) |
 | **Telemetry Parsing** | Regex substring search | Parsed SMART metrics (Attribute 5, 196, 197) |
-| **Knowledge Grounding** | Generic LLM memory | ChromaDB RAG over Dell hardware KB |
+| **Knowledge Grounding** | Generic LLM memory | local lexical retrieval fixture over Dell hardware KB |
 | **Ticket Dispatch** | None or naive repeated API call | Idempotent dispatch (`SHA256` token verification) |
 | **Output Contract** | Unstructured markdown text | Validated Pydantic JSON schema |
 | **Accuracy on Ambiguous Cases** | ~55% (hallucinates RAID model) | **96%+** (empirically grounded in Redfish data) |

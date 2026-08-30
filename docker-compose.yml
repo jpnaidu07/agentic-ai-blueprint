@@ -1,0 +1,60 @@
+name: agentic-ai-blueprint
+services:
+  app:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.backend
+    env_file: .env
+    environment:
+      BIND_HOST: 0.0.0.0
+      DATABASE_URL: postgresql+psycopg://blueprint:${POSTGRES_PASSWORD:?Run setup to generate a database password}@postgres:5432/blueprint
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 128
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: blueprint
+      POSTGRES_USER: blueprint
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run setup to generate a database password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U blueprint -d blueprint"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 2g
+    cpus: 2.0
+    restart: unless-stopped
+  ollama:
+    image: ollama/ollama:0.11.10
+    profiles: [local-ai]
+    volumes:
+      - ollama_models:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    mem_limit: 8g
+    cpus: 4.0
+    restart: unless-stopped
+volumes:
+  postgres_data:
+  ollama_models:

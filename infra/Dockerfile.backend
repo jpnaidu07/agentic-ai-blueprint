@@ -1,20 +1,10 @@
-FROM python:3.11-slim
-
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy and install python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy source files
-COPY src/ ./src/
-
+COPY requirements.txt pyproject.toml ./
+RUN pip install --no-cache-dir -r requirements.txt && useradd --create-home --uid 10001 blueprint
+COPY src ./src
+RUN pip install --no-cache-dir --no-deps .
+USER 10001:10001
 EXPOSE 8000
-
 CMD ["python", "-m", "src.api.server"]

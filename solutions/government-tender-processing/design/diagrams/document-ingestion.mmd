@@ -1,0 +1,10 @@
+flowchart TD
+  Upload[Authorized upload] --> Bounds[Bound body before multipart]
+  Bounds --> Type[Validate PDF signature and type]
+  Type --> Scan{Scanner clean or local development?}
+  Scan -->|No| Reject[Reject upload]
+  Scan -->|Yes| Parse[Extract layout and page text]
+  Parse --> Check{Supported digital PDF?}
+  Check -->|No| Reject
+  Check -->|Yes| Hash[Hash and detect duplicate in scope]
+  Hash --> Store[(Transactional bytes, pages and chunks)]
