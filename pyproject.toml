@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic-ai-blueprint"
-version = "0.3.0"
+version = "0.4.0"
 description = "Spec-first agent engineering and an evidence-based tender reference"
 requires-python = ">=3.11"
 dynamic = ["dependencies"]
 
 [project.scripts]
 agent-blueprint = "src.blueprint.cli:main"
+blueprint-workbench = "src.workbench.server:main"
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
@@ -20,7 +21,7 @@ include = ["src*"]
 namespaces = true
 
 [tool.setuptools.package-data]
-"src" = ["ui/*", "tender/ui/*"]
+"src" = ["ui/*", "tender/ui/*", "workbench/ui/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]

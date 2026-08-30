@@ -10,6 +10,20 @@ concurrency:
   group: validation-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  workbench-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements-dev.txt -e .
+      - run: docker build -f infra/Dockerfile.runner -t agent-blueprint-runner:local .
+      - run: python -m pytest src/tests/test_workbench_runtime.py -q
+        env:
+          BLUEPRINT_DOCKER_TESTS: "1"
   python:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -25,6 +39,8 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt -e .
       - run: python -m ruff check src scripts
       - run: python -m ruff format --check src scripts
+      - run: bash -n workbench.sh
+      - run: node --check src/workbench/ui/app.js && node --check src/tender/ui/app.js
       - run: python -m pytest -q
       - run: python -m src.evals.eval_harness
       - run: python -m scripts.validate_repo

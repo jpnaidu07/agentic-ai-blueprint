@@ -18,7 +18,8 @@ from src.tender.api import router
 from src.tender.security import authenticate
 from src.tender.store import Store
 
-load_dotenv()
+if os.getenv("BLUEPRINT_LOAD_DOTENV", "true").lower() == "true":
+    load_dotenv()
 logger = logging.getLogger("blueprint.requests")
 
 

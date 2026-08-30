@@ -1,5 +1,11 @@
 # Development setup
 
+For the guided developer UI (hardware detection, LLM connection, spec generation,
+implementation and application launch), start with the
+[local workbench walkthrough](workbench.md): run `./workbench.ps1` on Windows or
+`bash workbench.sh` on Linux/macOS, then pair at `http://127.0.0.1:8080`.
+The instructions below also support running the tender reference and CLI directly.
+
 Use synthetic data. This is a reference implementation, not an approved procurement service.
 
 ## Windows: container workflow

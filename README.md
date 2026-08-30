@@ -6,8 +6,11 @@
 
 A reusable, spec-first method for turning a business use case into reviewed
 capabilities, architecture and dependency-aware engineering work. The repository
-also includes a runnable **development reference** for government tender evidence
-review. It does not claim production certification or automate procurement awards.
+also includes a **local developer workbench** with a browser UI, Python API,
+OpenAI/Gemini/Ollama connections and bounded, model-assisted implementation.
+A runnable government tender reference demonstrates evidence review and independent
+approval. This is development software, not production certification or automated
+procurement awards.
 
 ![Eight-module Agentic AI Blueprint](docs/diagrams/agent-blueprint.svg)
 
@@ -30,6 +33,39 @@ Generate the specs all at once or stop after capability/design. Then use the
 guided coding-agent workflow to **explain → implement → test → record evidence**
 for all tasks, the next step, a skill or a numbered blueprint section. The CLI
 prepares plans and enforces evidence gates; the coding agent/developer writes code.
+The workbench adds an actual model executor for new solution-local Python apps,
+isolated Docker tests, progress history and health-checked preview URLs.
+
+## Start the developer workbench
+
+Install Python 3.11+ and clone this repository, then run:
+
+```powershell
+./workbench.ps1
+```
+
+Linux/macOS: `bash workbench.sh`. Open [http://127.0.0.1:8080](http://127.0.0.1:8080)
+and pair using the token printed in the terminal. The launcher creates a local
+virtual environment and installs pinned dependencies; no frontend build is needed.
+
+1. **Setup & models:** inspect laptop resources, connect OpenAI/Gemini or local
+   Ollama, list available models and test structured-output compatibility. Keys
+   stay in memory. Model-fit estimates are not quality/performance guarantees.
+2. **Solutions:** enter a problem statement → capability → design → decomposition.
+   Inspect/edit the actual files, resolve questions and approve the current version.
+3. **Run:** explain and generate the next task, all tasks, a skill or a blueprint
+   module. Enable isolated tests to verify work and unlock dependent tasks.
+4. **Applications:** launch the existing tender portal or a verified generated
+   Python preview. Prerequisites and manual steps remain visible; no success or
+   completion is invented when a step is blocked.
+
+Browsing and the tender reference need neither Docker nor a model key. Generating
+new solutions needs a connected model; testing/launching generated code needs the
+Docker runner. Installing Ollama, downloading models and launching apps are separate
+confirmed actions. The current generated preview supports Python/FastAPI, same-origin
+UI and temporary local data; other stacks/external services require reviewed setup.
+
+See the [workbench walkthrough, architecture and security boundaries](docs/workbench.md).
 
 ## Eight modules
 
@@ -44,7 +80,7 @@ prepares plans and enforces evidence gates; the coding agent/developer writes co
 | 7 | User Interface | Capability-derived screens/APIs, evidence and operational states |
 | 8 | Testing & Evaluation | Unit/API/security tests, golden data, retrieval quality, latency and observed usage |
 
-## Run it in ten minutes
+## Run the tender reference directly
 
 Windows container workflow:
 

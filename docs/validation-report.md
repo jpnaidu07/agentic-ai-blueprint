@@ -4,6 +4,44 @@ Date: 2026-08-30
 Environment: Windows x64, Python 3.12, Node.js 24, Codex in-app browser
 Scope: local checkout before commit and push
 
+## Local developer workbench validation (version 0.4)
+
+- Full suite: **92 passed, 1 skipped** in 43.04 seconds. The skip is the explicitly
+  enabled Docker test; Docker is absent on this laptop. The upstream TestClient
+  deprecation warning remains.
+- Ruff lint/format, JavaScript and PowerShell syntax, 10/10 offline evaluations,
+  runtime dependency audit and the 140-file repository validator passed. The editable
+  0.4.0 package installed successfully and its workbench entrypoint was exercised.
+- Twenty-five workbench tests cover pairing, Host/Origin/client-IP/CSRF boundaries,
+  no cookie authentication, request limits, memory-only keys, all three provider
+  connectors through intercepted HTTP, malformed responses, staged source creation,
+  stale approval/edit protection, isolated-test gating, failed-test feedback,
+  immutable task snapshots, path/device-name rejection, cancellation and restart.
+- A real trusted tender subprocess was launched and authenticated with four separate
+  roles. Two additional tender tests cover scoped inventory, ranked/L1/approved
+  results, stale-evidence abstention and exact cited document retrieval.
+- In-app browser checks covered pairing, environment detection, all 13 maintained
+  skills, the eight-module catalog, specification/task controls, confirmation UI,
+  run progress and a successful tender launch with a working URL. Desktop screenshots
+  were visually inspected; the workbench had no console errors at inspection.
+- The machine reported Core Ultra 9 285H, 31.4 GiB RAM and Intel Arc 140T graphics.
+  No local model was installed, downloaded or benchmarked. GPU acceleration remains
+  unverified; model-fit numbers are explicitly estimates.
+- CI now builds the generated-code runner and runs a real container test covering
+  non-root identity, readonly source/root, absent keys/socket, blocked test-network
+  access, preview health/loopback binding/resource configuration, stale-source
+  rejection and managed container cleanup. Its result must be read from the current
+  GitHub Actions run; this was not exercised locally.
+- Bash is not installed locally; CI checks the Bash launcher's syntax. No live
+  provider request, arbitrary-problem software quality, mobile/full accessibility
+  audit or production deployment certification is claimed. After restarting the
+  browser preview, automated re-pairing was blocked by the browser's credential
+  confirmation policy; the earlier paired UI/launch checks had already completed.
+
+The v0.3 CLI-only observations below are historical. Version 0.4 adds actual
+model-backed generation in the workbench, limited to a solution-local Python runtime;
+the CLI still prepares plans and the existing tender shared source stays protected.
+
 ## Guided workflow validation (version 0.3)
 
 - Full suite: **65 passed** in 31.82 seconds; the same upstream TestClient

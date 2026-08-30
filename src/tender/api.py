@@ -2,11 +2,13 @@
 
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -541,6 +543,101 @@ def search(
         "status": "EVIDENCE_FOUND" if results else "INSUFFICIENT_EVIDENCE",
         "generated_answer": None,
     }
+
+
+class TenderQuestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    question: str = Field(min_length=2, max_length=1000)
+
+
+@router.post("/{tender_id}/questions")
+def question(
+    tender_id: str,
+    body: TenderQuestion,
+    principal: Principal = Depends(authenticate),
+    db: Store = Depends(store),
+):
+    """Ground common questions in scoped SQL snapshots; never execute generated SQL."""
+    current = detail(tender_id, principal, db)
+    text = body.question.lower()
+    evaluation_query = bool(
+        re.search(
+            r"\b(top|ranks?|ranking|lowest|l1|approv\w*|missing|fail\w*|compare|winners?)\b", text
+        )
+    )
+    latest = current["evaluations"][0] if current["evaluations"] else None
+    response = {
+        "mode": "deterministic-query-or-evidence-search",
+        "tender_id": tender_id,
+        "revision": current["revision"],
+        "answer": "",
+        "rows": [],
+        "citations": [],
+        "award": "No procurement award is automatically issued.",
+    }
+    if not evaluation_query and any(
+        word in text
+        for word in ("inventory", "how many", "list bidder", "list bid", "participation")
+    ):
+        response.update(
+            answer=f"This tender has {len(current['bids'])} registered bidders and {len(current['documents'])} uploaded documents.",
+            rows=current["bids"],
+        )
+        return response
+    if evaluation_query:
+        if not latest:
+            response["answer"] = (
+                "No evaluation exists yet. Upload evidence, accept reviewed facts and run an evaluation; no ranking can be inferred from document text alone."
+            )
+            return response
+        response["citations"] = [
+            {
+                "evaluation_id": latest["id"],
+                "revision": latest["revision"],
+                "state": latest["state"],
+            }
+        ]
+        if latest["revision"] != current["revision"]:
+            response["answer"] = (
+                "The latest evaluation is stale because evidence changed. Re-evaluate before relying on rankings or approval."
+            )
+            response["stale"] = True
+            return response
+        rows = latest["report"]["bids"]
+        if "approv" in text or "winner" in text:
+            response["answer"] = (
+                f"The evaluation is {latest['state']}. Committee approval applies to the evaluation, not an automatic contract award."
+            )
+            response["rows"] = rows if latest["state"] == "APPROVED" else []
+        elif any(word in text for word in ("missing", "fail")):
+            response["answer"] = (
+                "These bids have missing evidence, failed eligibility or review flags in the current evaluation."
+            )
+            response["rows"] = [row for row in rows if row["status"] != "ELIGIBLE"]
+        elif "lowest" in text or "l1" in text:
+            response["answer"] = (
+                "These complete eligible bids share the lowest comparable commercial total (L1)."
+            )
+            response["rows"] = [row for row in rows if row.get("is_l1")]
+        else:
+            count = re.search(r"top\s+(\d{1,2})", text)
+            limit = min(20, max(1, int(count.group(1)))) if count else 5
+            ranked = sorted(
+                [row for row in rows if row["rank"] is not None], key=lambda row: row["rank"]
+            )
+            response["answer"] = (
+                f"Top {limit} rank positions from the published deterministic policy; equal ranks remain tied. This is a recommendation for human review."
+            )
+            response["rows"] = [row for row in ranked if row["rank"] <= limit]
+        return response
+    evidence = search(tender_id, body.question, None, principal, db)
+    response["answer"] = (
+        "Retrieved source excerpts for your question. These are evidence, not an inferred procurement conclusion."
+        if evidence["matches"]
+        else "Insufficient evidence for this question. No answer was invented."
+    )
+    response["citations"] = evidence["matches"]
+    return response
 
 
 @router.get("/{tender_id}/audit")

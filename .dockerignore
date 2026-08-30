@@ -1,4 +1,9 @@
 .git
+.workbench
+solutions/*/implementation/runtime
+solutions/*/implementation/evidence
+solutions/*/implementation/receipts
+solutions/*/approval.json
 .venv
 .env
 .env.*

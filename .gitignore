@@ -59,6 +59,7 @@ logs/
 *.log
 
 # Local confidential data, receipts and generated outputs
+.workbench/
 .env.*
 !.env.example
 .local-credentials.txt
