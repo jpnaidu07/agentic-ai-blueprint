@@ -14,7 +14,16 @@ class Requirement(Contract):
     id: str = Field(pattern=r"^[A-Z][A-Z0-9-]{1,39}$")
     objective: str = Field(min_length=10)
     acceptance: list[str] = Field(min_length=1)
-    skill: Literal["backend", "database", "frontend", "agents", "rag", "infrastructure", "security"]
+    skill: Literal[
+        "backend",
+        "database",
+        "frontend",
+        "agents",
+        "rag",
+        "production-rag",
+        "infrastructure",
+        "security",
+    ]
     depends_on: list[str] = Field(default_factory=list)
     blueprint_modules: list[Annotated[int, Field(ge=1, le=8)]] = Field(default_factory=list)
 

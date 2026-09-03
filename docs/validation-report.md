@@ -1,29 +1,35 @@
 # Validation report
 
-Date: 2026-08-30
+Date: 2026-09-03
 Environment: Windows x64, Python 3.12, Node.js 24, Codex in-app browser
 Scope: local checkout before commit and push
 
 ## Local developer workbench validation (version 0.4)
 
-- Full suite: **93 passed, 1 skipped** in 58.15 seconds. The skip is the explicitly
+- Full suite: **95 passed, 1 skipped** in 34.08 seconds. The skip is the explicitly
   enabled Docker test; Docker is absent on this laptop. The upstream TestClient
   deprecation warning remains.
 - Ruff lint/format, JavaScript and PowerShell syntax, 10/10 offline evaluations,
-  runtime dependency audit and the 142-file repository validator passed. The editable
+  runtime dependency audit and the 145-file repository validator passed. The editable
   0.4.0 package installed successfully and its workbench entrypoint was exercised.
-- Twenty-five workbench tests cover pairing, Host/Origin/client-IP/CSRF boundaries,
+- Twenty-six workbench tests cover pairing, Host/Origin/client-IP/CSRF boundaries,
   no cookie authentication, request limits, memory-only keys, all three provider
   connectors through intercepted HTTP, malformed responses, staged source creation,
   stale approval/edit protection, isolated-test gating, failed-test feedback,
   immutable task snapshots, path/device-name rejection, cancellation and restart.
+- The new `production-rag` skill passed the Skill Creator validator and is exercised
+  as a distinct capability type. Tests cover its module mapping, generated execution
+  packet and workbench catalog references. It documents production gates without
+  claiming that the tender reference already has a persistent vector index.
 - A real trusted tender subprocess was launched and authenticated with four separate
   roles. Two additional tender tests cover scoped inventory, ranked/L1/approved
   results, stale-evidence abstention and exact cited document retrieval.
-- In-app browser checks covered pairing, environment detection, all 13 maintained
-  skills, the eight-module catalog, specification/task controls, confirmation UI,
+- Earlier in-app browser checks covered pairing, environment detection, the 13 skills
+  maintained at that time, the eight-module catalog, specification/task controls,
+  confirmation UI,
   run progress and a successful tender launch with a working URL. Desktop screenshots
-  were visually inspected; the workbench had no console errors at inspection.
+  were visually inspected; the workbench had no console errors at inspection. The
+  later production-RAG catalog addition was API-tested but not visually rechecked.
 - The machine reported Core Ultra 9 285H, 31.4 GiB RAM and Intel Arc 140T graphics.
   No local model was installed, downloaded or benchmarked. GPU acceleration remains
   unverified; model-fit numbers are explicitly estimates.

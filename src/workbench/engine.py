@@ -24,7 +24,13 @@ class Engine:
     def skill(self, name):
         if name not in {*specs.SKILLS, *specs.STAGES}:
             raise WorkbenchError("Unknown skill")
-        return local_path(self.root, f"skills/{name}/SKILL.md").read_text(encoding="utf-8")
+        content = local_path(self.root, f"skills/{name}/SKILL.md").read_text(encoding="utf-8")
+        if name == "production-rag":
+            checklist = local_path(
+                self.root, "skills/production-rag/references/design-checklist.md"
+            ).read_text(encoding="utf-8")
+            content += "\n\n## Implementation checklist\n\n" + checklist
+        return content
 
     def artifacts(self, path):
         result = {}

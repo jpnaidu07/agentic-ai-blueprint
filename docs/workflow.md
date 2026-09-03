@@ -109,7 +109,10 @@ Markdown teaching plan plus a JSON snapshot in `implementation/work-packages/`.
 | UI section plus prerequisite tasks | `run my-problem --module 7 --include-dependencies` |
 | Current progress and next command | `status my-problem` / `guide my-problem` |
 
-Other skills: `rag`, `security`, `infrastructure`, `tests`, `evals`, `deployment`.
+Other skills: `rag`, `production-rag`, `security`, `infrastructure`, `tests`, `evals`,
+`deployment`. Use `rag` for lexical/basic evidence retrieval. Use `production-rag`
+when the capability requires ingestion lifecycle, embeddings, a persistent vector
+index and cited LLM answer generation.
 Not every problem needs every skill. For example, a deterministic service may not
 need an LLM, vector database or agent task. Design still considers all eight
 modules and explains which capabilities apply.

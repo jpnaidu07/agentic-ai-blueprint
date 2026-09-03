@@ -261,7 +261,7 @@ function renderSolution(data) {
     const controls = element('div', undefined, 'run-controls');
     controls.append(element('h3', 'Choose how you want to work'), element('p', data.reference ? 'Prepare a step-by-step teaching plan for the existing reference. Use a coding agent/developer to extend its shared source; this action makes no LLM calls and runs no code.' : 'Generate selected source, or also test it inside Docker. A task is not complete merely because files were created.', 'subtle'));
     const selector = element('select'); selector.id = 'run-selector';
-    selector.append(...[['next','Next ready task'],['all','All tasks (bounded run)'],...['database','backend','agents','rag','frontend','security','infrastructure','tests','evals','deployment'].map(skill => [skill,skill]),...data.tasks.map(task => [task.id,task.id])].map(([value,label]) => option(value,label)));
+    selector.append(...[['next','Next ready task'],['all','All tasks (bounded run)'],...['database','backend','agents','rag','production-rag','frontend','security','infrastructure','tests','evals','deployment'].map(skill => [skill,skill]),...data.tasks.map(task => [task.id,task.id])].map(([value,label]) => option(value,label)));
     const module = element('select'); module.id = 'run-module'; module.append(option('','Use task/skill scope'), ...Array.from({length:8},(_,i)=>option(String(i+1),`Blueprint section ${i+1}`)));
     const grid = element('div', undefined, 'form-grid'); grid.append(field('Task scope', selector), field('Or numbered blueprint section', module)); controls.append(grid);
     controls.append(check('Include unfinished prerequisites outside this selection.', 'include-dependencies'));

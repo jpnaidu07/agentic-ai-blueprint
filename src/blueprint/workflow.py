@@ -23,6 +23,10 @@ LESSONS = {
         "Evidence retrieval and provenance",
         "Implement parsing, chunk metadata, access filters and retrieval; measure citations and missing-evidence behavior.",
     ),
+    "production-rag": (
+        "Production evidence-grounded retrieval",
+        "Implement versioned ingestion and indexing, authorized hybrid retrieval, cited generation and measured failure behavior.",
+    ),
     "frontend": (
         "User journeys and observable state",
         "Implement screens against approved APIs; test loading, empty, error, authorization and accessibility states.",

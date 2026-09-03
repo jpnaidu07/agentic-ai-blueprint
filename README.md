@@ -164,6 +164,12 @@ in `open_questions`.
 Reusable skill instructions live under `skills/`. Generated solution decisions
 remain under `solutions/`; neither is embedded into the other.
 
+Use the lightweight `rag` skill for lexical/basic evidence retrieval. Select
+`production-rag` when a capability requires a full ingestion and index lifecycle,
+embeddings, persistent vector retrieval, grounded answer generation and measured
+quality. Its references include a design checklist and an interview-ready account
+of the tender system's hardest LLM-agent boundary, with unfinished work disclosed.
+
 ## Government tender reference
 
 [Government Tender Intelligence & Bid Evaluation](solutions/government-tender-processing/)

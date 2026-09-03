@@ -199,6 +199,20 @@ def test_pairing_origin_host_csrf_and_remote_boundaries(workbench):
     assert client.get("/").headers["content-security-policy"].find("script-src 'self'") >= 0
 
 
+def test_catalog_exposes_production_rag_guidance(workbench):
+    client, _, _ = workbench
+    pair(client)
+    items = client.get("/api/catalog").json()["items"]
+    ids = {item["id"] for item in items}
+    skill = "skills/production-rag/SKILL.md"
+    interview = "skills/production-rag/references/interview-story.md"
+    assert {skill, interview} <= ids
+    assert (
+        "trustworthy evidence boundary"
+        in client.get("/api/catalog/content", params={"item": interview}).json()["content"]
+    )
+
+
 def test_keys_are_not_echoed_stored_or_reused_without_consent(workbench):
     client, root, model = workbench
     pair(client)

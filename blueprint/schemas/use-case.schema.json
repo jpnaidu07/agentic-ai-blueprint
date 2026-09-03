@@ -28,6 +28,7 @@
             "frontend",
             "agents",
             "rag",
+            "production-rag",
             "infrastructure",
             "security"
           ],

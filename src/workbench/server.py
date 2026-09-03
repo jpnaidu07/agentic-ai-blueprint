@@ -271,6 +271,10 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
                 for name in ("use-case", "design", "decomposition")
             ],
             ".agents/skills/blueprint-workflow/SKILL.md",
+            *[
+                file.relative_to(root).as_posix()
+                for file in sorted((root / "skills").glob("*/references/*.md"))
+            ],
         ]:
             if (root / relative).is_file():
                 items.append(

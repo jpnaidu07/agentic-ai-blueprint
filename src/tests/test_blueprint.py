@@ -71,3 +71,25 @@ def test_receipt_evidence_cannot_change_silently(solution):
     evidence.write_text("Changed", encoding="utf-8")
     with pytest.raises(ValueError, match="Stale"):
         specs.run_skill(root, path, "tests")
+
+
+def test_production_rag_is_a_distinct_selectable_work_package(tmp_path):
+    shutil.copytree(ROOT / "skills", tmp_path / "skills")
+    case = specs.read_yaml(ROOT / "templates/use-case.yaml")
+    case["name"] = "knowledge-assistant"
+    case["requirements"][1]["skill"] = "production-rag"
+    case["requirements"][1].pop("blueprint_modules")
+    source = tmp_path / "case.yaml"
+    source.write_text(yaml.safe_dump(case, sort_keys=False), encoding="utf-8")
+    path = specs.create(tmp_path, source)
+    specs.approve(path, "reviewer")
+    evidence = path / "evidence.txt"
+    evidence.write_text("Verified prerequisite storage implementation and tests.", encoding="utf-8")
+    specs.complete(path, "TASK-CAP-DATA", ["evidence.txt"], "reviewer")
+    packet = specs.run_skill(tmp_path, path, "production-rag")
+    content = packet.read_text(encoding="utf-8")
+    assert "Production RAG engineering" in content
+    assert "TASK-CAP-01" in content
+    task = next(task for task in specs.validate(path)[2].tasks if task.id == "TASK-CAP-01")
+    assert task.skill == "production-rag"
+    assert task.blueprint_modules == [2, 3, 4, 5, 6, 7, 8]

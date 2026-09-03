@@ -156,7 +156,12 @@ def test_tender_example_has_database_dependency_graph_and_eight_module_coverage(
     specs.approve(path, "test-reviewer")
     progress = workflow.status(path)
     assert {n for task in progress["tasks"] for n in task["modules"]} == set(range(1, 9))
-    assert {task["skill"] for task in progress["tasks"]} == set(specs.SKILLS)
+    expected = {requirement.skill for requirement in specs.validate(path)[0].requirements}
+    assert {task["skill"] for task in progress["tasks"]} == expected | {
+        "tests",
+        "evals",
+        "deployment",
+    }
     assert next(t for t in progress["tasks"] if t["ready"])["skill"] == "database"
     for module in range(1, 9):
         assert workflow.prepare(tmp_path, path, module=module).exists()
