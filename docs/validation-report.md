@@ -1,8 +1,28 @@
 # Validation report
 
-Date: 2026-09-03
+Date: 2026-09-08
 Environment: Windows x64, Python 3.12, Node.js 24, Codex in-app browser
 Scope: local checkout before commit and push
+
+## FDE concept teaching follow-up (2026-09-08)
+
+- Full suite: **102 passed, 1 skipped** in 25.87 seconds. The opt-in Docker runtime
+  test was not enabled locally; the existing upstream TestClient warning remains.
+- Ruff lint/format and the 163-file repository schema/link/secret-pattern validator
+  passed. All 14 engineering skill entrypoints and the blueprint-workflow skill
+  passed the Skill Creator validator.
+- Tests verify runtime loading into stage/task prompts, concept reference catalog
+  access, lesson retention with task evidence, CLI packet refresh and rejection of
+  incomplete teaching before code writes or completion receipts.
+- Workbench implementation responses now require eight structured lesson fields.
+  Existing saved run results retain their textual lesson representation. The
+  reference teaching plan is returned in full so later tasks are not truncated.
+- No live provider teaching-quality evaluation, learner mastery assessment, browser
+  visual recheck or customer outcome measurement was performed for this follow-up.
+  The [FDE learning audit](fde-learning.md) distinguishes implemented foundations,
+  proposed exercises and experience still required.
+
+Earlier validation results below describe their original scope and date.
 
 ## Local developer workbench validation (version 0.4)
 

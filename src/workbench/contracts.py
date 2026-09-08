@@ -80,8 +80,57 @@ class SourceFile(Contract):
     content: str = Field(max_length=100000)
 
 
+class Lesson(Contract):
+    concept: str = Field(
+        min_length=20,
+        max_length=1000,
+        description="Define the concept and trace an input to output.",
+    )
+    use_case: str = Field(
+        min_length=20,
+        max_length=1000,
+        description="Why this approved capability and its constraints justify the approach.",
+    )
+    alternatives: str = Field(
+        min_length=20,
+        max_length=1000,
+        description="Compare two credible alternatives and when to prefer them.",
+    )
+    benefits_and_costs: str = Field(
+        min_length=20,
+        max_length=1000,
+        description="Advantages and relevant quality, latency, cost and maintenance tradeoffs.",
+    )
+    advanced: str = Field(
+        min_length=20,
+        max_length=1400,
+        description="Explain two applicable advanced mechanisms or failure modes; distinguish planned from implemented.",
+    )
+    experiment: str = Field(
+        min_length=20,
+        max_length=1400,
+        description="Fixture, steps, expected observation, negative case; label unexecuted work proposed.",
+    )
+    check_understanding: str = Field(
+        min_length=20,
+        max_length=1000,
+        description="A use-case scenario question with an answer rubric; do not block all-mode on a quiz.",
+    )
+    interview: str = Field(
+        min_length=20,
+        max_length=1000,
+        description="Explain decision, tradeoff and evidence without inventing experience or measured results.",
+    )
+
+    def render(self):
+        return "\n\n".join(
+            f"{name.replace('_', ' ').capitalize()}\n{value}"
+            for name, value in self.model_dump().items()
+        )
+
+
 class Implementation(Contract):
-    lesson: str = Field(min_length=10, max_length=6000)
+    lesson: Lesson
     files: list[SourceFile] = Field(max_length=20)
     verification: str = Field(min_length=5, max_length=5000)
     manual_steps: list[str] = Field(max_length=20)

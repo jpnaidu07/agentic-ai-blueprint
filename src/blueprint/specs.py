@@ -10,6 +10,7 @@ from pathlib import Path
 
 import yaml
 
+from src.blueprint import learning
 from src.blueprint.models import Decomposition, Design, Module, Task, UseCase
 
 MODULES = [
@@ -456,7 +457,7 @@ def run_skill(root, path, skill):
     if not tasks:
         raise ValueError(f"No {skill} work packages in this solution")
     require_dependencies(path, set(d for t in tasks for d in t.dependencies))
-    guidance = (root / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+    guidance = learning.guidance(root, skill)
     destination = path / "implementation" / "work-packages"
     if not destination.resolve().is_relative_to(path.resolve()):
         raise ValueError("Work-package path escapes solution")

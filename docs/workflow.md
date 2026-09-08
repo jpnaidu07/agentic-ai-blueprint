@@ -141,6 +141,13 @@ revalidated; no old receipt is silently treated as fresh evidence.
 
 ## What every task teaches and completes
 
+Use the [shared teaching contract](../skills/learning-contract.md) and the selected
+skill's concept reference for every stage/task, including all and section runs.
+CLI packets embed the material. Define what it is, why it fits the current problem,
+alternatives, benefits/costs, advanced mechanisms, an experiment and self-check,
+then explain the implemented evidence in interview/customer language. See the
+[FDE coverage audit](fde-learning.md) for coverage and remaining practice.
+
 1. **Explain:** the goal, relevant blueprint sections, inputs, design choice,
    expected files/contracts and success check.
 2. **Build:** real service, API, database/migration, agent/tool, screen or

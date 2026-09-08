@@ -16,6 +16,11 @@ procurement awards.
 
 ## Why spec first
 
+For concept-by-concept learning, follow the [FDE learning audit and walkthrough](docs/fde-learning.md).
+Every skill includes what/why, alternatives, tradeoffs, advanced concepts, a
+practical exercise and interview practice. Workbench task generation requires a
+structured lesson; CLI plans carry the same teaching material for a coding agent.
+
 A model can generate convincing code before requirements, authorization and
 acceptance criteria are understood. This project makes those decisions reviewable:
 

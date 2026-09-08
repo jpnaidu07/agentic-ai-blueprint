@@ -34,6 +34,13 @@ retains its key until it returns at its bounded safe cancellation point.
 
 ## Walk through the UI
 
+Each stage shows a maintained concept primer in Run history. Generated implementation
+tasks also require a structured lesson: what, why this use case, alternatives,
+benefits/costs, advanced concepts, experiment, self-check and interview explanation.
+Read the [FDE learning guide](fde-learning.md) and browse the per-skill learning
+references in the catalog. These are loaded at runtime; no new install is needed.
+Exercise proposals and model explanations are not evidence of executed tests.
+
 1. **Overview:** learn the project and six workflow stages. Explore the included
    tender application or start a different business problem.
 2. **Setup & models:** detect CPU, RAM, available memory, disk, GPU names, Docker

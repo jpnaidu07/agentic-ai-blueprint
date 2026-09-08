@@ -50,6 +50,7 @@ class ModelFixture:
         self.case = UseCase.model_validate(specs.read_yaml(ROOT / "templates/use-case.yaml"))
         self.calls = []
         self.unsafe_path = None
+        self.incomplete_lesson = False
 
     def handle(self, request):
         self.calls.append(request)
@@ -69,7 +70,16 @@ class ModelFixture:
             output = specs.compile_specs(self.case)[2]
         elif "files" in properties:
             output = {
-                "lesson": "Create durable request records and verify the contract.",
+                "lesson": {
+                    "concept": "A relational record stores a request under a stable identity.",
+                    "use_case": "Support operators need durable ownership and request history.",
+                    "alternatives": "Files simplify a tiny prototype; a queue transports events but does not replace request storage.",
+                    "benefits_and_costs": "Constraints improve integrity while migrations and indexes add maintenance.",
+                    "advanced": "Transactions prevent partial writes; revision checks reject conflicting updates.",
+                    "experiment": "Proposed: insert a request, retry it, and reject an unknown team; inspect stored rows.",
+                    "check_understanding": "Can a queue count current requests? Rubric: use the authoritative request records.",
+                    "interview": "This fixture tests orchestration only and does not claim a real customer deployment.",
+                },
                 "files": [
                     {
                         "path": self.unsafe_path or "records.py",
@@ -90,6 +100,8 @@ class ModelFixture:
                 "next_steps": ["Run representative cases"],
                 "limitations": ["No quality benchmark was measured"],
             }
+        if self.incomplete_lesson and "files" in output:
+            del output["lesson"]["alternatives"]
         return httpx.Response(
             200,
             json={
@@ -343,6 +355,61 @@ def test_editor_optimistic_concurrency_and_stale_approval(workbench):
     assert client.put("/api/solutions/generated-service/specs", json=body).status_code == 409
     with pytest.raises(ValueError, match="stale"):
         specs.require_approval(root / "solutions/generated-service")
+
+
+def test_teaching_is_loaded_for_stages_and_tasks_and_retained(workbench):
+    client, root, model = workbench
+    pair(client)
+    connect(client)
+    create_solution(client)
+    stage_calls = [json.loads(call.content) for call in model.calls if call.method == "POST"][1:]
+    for stage, call in zip(specs.STAGES, stage_calls, strict=True):
+        primer = (root / f"skills/{stage}/references/learning.md").read_text(encoding="utf-8")
+        assert primer in call["messages"][0]["content"]
+    lesson_path = root / "skills/database/references/learning.md"
+    revised = "Current database teaching revision, with a local experiment for this learner."
+    lesson_path.write_text(revised, encoding="utf-8")
+    job = finish_job(
+        client,
+        client.post(
+            "/api/solutions/generated-service/run",
+            json={"selector": "next", "confirmed": True, "execute": True},
+        ),
+    )
+    assert job["state"] == "succeeded", job
+    assert revised in json.loads(model.calls[-1].content)["messages"][0]["content"]
+    assert any(revised in event["message"] for event in job["events"])
+    lesson = job["result"]["tasks"][0]["lesson"]
+    assert "Support operators" in lesson
+    evidence = (
+        root / "solutions/generated-service/implementation/database/task-cap-data-evidence.md"
+    )
+    assert lesson.splitlines()[1] in evidence.read_text(encoding="utf-8")
+    refs = {row["id"] for row in client.get("/api/catalog").json()["items"]}
+    assert "docs/fde-learning.md" in refs
+    assert all(
+        f"skills/{name}/references/learning.md" in refs for name in [*specs.STAGES, *specs.SKILLS]
+    )
+
+
+def test_incomplete_teaching_cannot_write_code_or_issue_receipts(workbench):
+    client, root, model = workbench
+    pair(client)
+    connect(client)
+    create_solution(client)
+    model.incomplete_lesson = True
+    job = finish_job(
+        client,
+        client.post(
+            "/api/solutions/generated-service/run",
+            json={"selector": "next", "confirmed": True, "execute": True},
+        ),
+    )
+    assert job["state"] in {"blocked", "failed"}, job
+    path = root / "solutions/generated-service/implementation"
+    assert not (path / "runtime").exists()
+    assert not (path / "receipts").exists()
+    assert client.app.state.runtime.verifications == 0
 
 
 def test_schema_requires_all_properties_recursively():

@@ -40,8 +40,14 @@ Repository paths below are relative to the checkout root.
 1. Generate the selected `run` plan. These commands prepare instructions; they do
    **not** build software. Read the plan, current specs, actual mapped implementation
    and the relevant `skills/<skill>/SKILL.md`. Check status before each task.
-2. Explain the task's purpose, input/output, design choice and success check in a
-   short lesson. Then implement the real source, migration, service, agent, UI or
+2. Read [the teaching contract](../../../skills/learning-contract.md) and the selected
+   skill's concept lesson before each specification or implementation step. Define
+   what it is, why this use case needs it, alternatives, advantages and costs, two
+   relevant advanced mechanisms, a proposed/executed experiment, a self-check with
+   answer rubric and an evidence-backed interview explanation. Use current specs
+   and actual files; do not substitute a generic task summary. Persist stage lessons
+   in solution-local learning notes and task lessons in evidence. In all mode teach
+   each step without waiting for quiz answers. Then implement the real source, migration, service, agent, UI or
    configuration. New domain source belongs in the selected solution's
    `implementation/` unless the reviewed design explicitly maps existing source.
 3. Run the acceptance checks, inspect output, fix failures within scope, and explain

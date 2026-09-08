@@ -5,6 +5,11 @@ description: Design and implement evidence-grounded RAG when a solution requires
 
 # Production RAG engineering
 
+Before this step, read [the teaching contract](../learning-contract.md) and
+[this concept lesson](references/learning.md). Explain what, why for the selected
+use case, alternatives, benefits/costs, advanced mechanisms and a practical
+exercise with a self-check; retain the explanation with the task evidence.
+
 Start from the approved capability and data boundary. Confirm that unstructured knowledge retrieval is required; use SQL or typed APIs for counts, workflow state, prices, rankings, and other authoritative transactions. Do not add a vector database merely because an LLM is present.
 
 Design two independently retryable pipelines. Ingestion normalizes supported sources into versioned documents, parses unsafe formats in an isolated worker, creates structure-aware chunks with stable source/page/section offsets and ACL metadata, embeds with a versioned model, and idempotently upserts or removes a persistent index. Retrieval authorizes the resource scope before search, combines approved lexical and dense modes, optionally reranks, fits evidence into a bounded context, and generates an answer that cites the retrieved source identifiers or abstains.

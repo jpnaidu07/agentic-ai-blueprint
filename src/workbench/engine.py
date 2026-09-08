@@ -8,7 +8,7 @@ from pathlib import Path
 
 import yaml
 
-from src.blueprint import specs, workflow
+from src.blueprint import learning, specs, workflow
 from src.blueprint.models import Decomposition, Design, UseCase
 from src.workbench.contracts import Advice, Implementation
 from src.workbench.runtime import SUFFIXES, source_digest, source_snapshot
@@ -24,13 +24,14 @@ class Engine:
     def skill(self, name):
         if name not in {*specs.SKILLS, *specs.STAGES}:
             raise WorkbenchError("Unknown skill")
-        content = local_path(self.root, f"skills/{name}/SKILL.md").read_text(encoding="utf-8")
-        if name == "production-rag":
-            checklist = local_path(
-                self.root, "skills/production-rag/references/design-checklist.md"
-            ).read_text(encoding="utf-8")
-            content += "\n\n## Implementation checklist\n\n" + checklist
-        return content
+        return learning.guidance(self.root, name)
+
+    def teach(self, name, job_id):
+        self.jobs.event(
+            job_id,
+            "Concept primer (adapt decisions to the selected specifications):\n\n"
+            + learning.primer(self.root, name),
+        )
 
     def artifacts(self, path):
         result = {}
@@ -88,6 +89,7 @@ class Engine:
             job_id,
             "Capability lesson: identify actors, journeys, business rules, acceptance checks and unknowns before choosing technology.",
         )
+        self.teach("capability", job_id)
         case, usage = self.providers.generate(
             connection,
             UseCase,
@@ -139,6 +141,7 @@ class Engine:
             job_id,
             f"{stage.title()} lesson: {'compare architecture choices and map each requirement to the eight modules' if stage == 'design' else 'define concrete source files, contracts, dependencies, tests and completion criteria'}.",
         )
+        self.teach(stage, job_id)
         model = Design if stage == "design" else Decomposition
         instructions = (
             self.skill(stage)
@@ -245,6 +248,7 @@ class Engine:
             data["specifications"] = self.artifacts(
                 specs.safe_solution(self.root, question.solution)
             )
+        data["teaching_method"] = learning.read_material(self.root, "learning-contract.md")
         advice, usage = self.providers.generate(
             connection,
             Advice,
@@ -271,7 +275,7 @@ class Engine:
             return {
                 "message": "Teaching plan prepared for the existing reference. Launch the Tender reference from Apps to explore it. Use the displayed plan with a coding agent to modify shared source; this UI's code writer is restricted to new solution-local runtime files.",
                 "plan": packet.relative_to(path).as_posix(),
-                "lesson": packet.read_text(encoding="utf-8")[:30000],
+                "lesson": packet.read_text(encoding="utf-8"),
                 "outcome": "reference-ready-to-explore",
             }
         if body.execute:
@@ -295,6 +299,7 @@ class Engine:
                 continue
             task = tasks[row["id"]]
             self.jobs.event(job_id, f"{task.id}: {task.objective}")
+            self.teach(task.skill, job_id)
             runtime = path / "implementation/runtime"
             before = source_snapshot(runtime)
             feedback = self.state / "task-feedback" / name / f"{task.id}.json"
@@ -315,7 +320,7 @@ class Engine:
                     + (self.root / "requirements.txt").read_text(),
                 },
             )
-            self.jobs.event(job_id, bundle.lesson)
+            self.jobs.event(job_id, bundle.lesson.render())
             self.jobs.check_cancelled()
             if specs.spec_digest(path) != plan["spec_digest"] or before != source_snapshot(runtime):
                 raise WorkbenchError(
@@ -355,7 +360,7 @@ class Engine:
                 target.write_text(content, encoding="utf-8")
             outcome = {
                 "task": task.id,
-                "lesson": bundle.lesson,
+                "lesson": bundle.lesson.render(),
                 "summary": bundle.summary,
                 "files": list(prepared),
                 "manual_steps": bundle.manual_steps,

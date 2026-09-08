@@ -264,6 +264,8 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
             "blueprint/tender-use-case.yaml",
             "docs/workbench.md",
             "docs/workflow.md",
+            "docs/fde-learning.md",
+            "skills/learning-contract.md",
             "docs/providers.md",
             "README.md",
             *[
