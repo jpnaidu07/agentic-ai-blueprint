@@ -170,25 +170,40 @@ click('disconnect-model', async () => {
 });
 click('scan-system', async () => {
   notice('Checking CPU, memory, local runtimes and Docker readiness…');
-  const data = await api('/api/system');
+  let data = await api('/api/system');
   const stats = [['PROCESSOR', data.cpu, `${data.logical_cpus || '?'} logical CPUs · ${data.architecture}`], ['SYSTEM MEMORY', data.ram_gb ? `${data.ram_gb} GiB` : 'Unknown', `${data.available_ram_gb ?? '?'} GiB currently available`], ['GRAPHICS', data.gpu, 'Acceleration must be tested'], ['LOCAL TOOLS', data.tools.docker_ready ? 'Docker ready' : 'Docker needs setup', `Ollama: ${data.tools.ollama_ready ? 'running' : data.tools.ollama ? 'installed' : 'not found'} · ${data.disk_free_gb} GiB free`]];
   $('hardware').replaceChildren(...stats.map(([label, value, note]) => {
     const card = element('div'); card.append(element('span', label), element('strong', value), element('small', note)); return card;
   }));
-  $('local-models').replaceChildren(...data.local_models.map(model => {
+  const baseline = new Map(data.local_models.map(model => [model.id, model]));
+  let recommendations = null;
+  let recommendationError = null;
+  if (state.connected) {
+    notice(`Hardware detected. Asking ${state.provider} / ${state.model} to rank candidates${state.selected ? ` for ${state.selected}` : ' for this workspace'}…`);
+    try {
+      recommendations = await api('/api/system/recommendations', {method: 'POST', body: {solution: state.selected}});
+      data = recommendations.hardware;
+    } catch (error) { recommendationError = error; }
+  }
+  const models = recommendations ? recommendations.candidates.map(candidate => ({...baseline.get(candidate.model), id: candidate.model, ...candidate})) : data.local_models;
+  $('local-models').replaceChildren(...models.map(model => {
     const card = element('article', undefined, 'card');
     const head = element('div', undefined, 'section-head');
-    head.append(element('h2', model.id), element('span', model.fits_estimate ? 'Fits memory estimate' : 'Outside safe estimate', `pill ${model.fits_estimate ? 'green' : 'warn'}`));
-    card.append(head, element('p', model.purpose), element('p', `Download ≈ ${model.download_gb} GB · runtime budget ≈ ${model.working_gb} GiB, plus OS/services. ${model.available_now_estimate ? 'Current free memory meets the conservative estimate.' : 'Close other workloads or check available memory before running.'}`));
+    const label = recommendations ? `${model.recommendation} · ${model.deployment}` : (model.fits_estimate ? 'Fits memory estimate' : 'Outside safe estimate');
+    head.append(element('h2', model.id), element('span', label, `pill ${(model.fits_estimate || model.recommendation === 'recommended') ? 'green' : 'warn'}`));
+    if (recommendations) card.append(head, element('p', model.best_for), element('p', model.rationale), element('small', `Validate: ${model.validation}`));
+    else card.append(head, element('p', model.purpose), element('p', `Download ≈ ${model.download_gb} GB · runtime budget ≈ ${model.working_gb} GiB, plus OS/services. ${model.available_now_estimate ? 'Current free memory meets the conservative estimate.' : 'Close other workloads or check available memory before running.'}`));
     const installed = data.installed_models.includes(model.id);
-    card.append(button(installed ? 'Select installed model' : 'Review model download…', async () => {
-      if (installed) { $('provider').value = 'ollama'; $('provider').dispatchEvent(new Event('change')); $('model').value = model.id; $('connection-form').scrollIntoView({behavior: 'smooth'}); }
-      else await systemAction('pull-model', model.id);
+    if (installed) card.append(button('Select installed model', () => {
+      $('provider').value = 'ollama'; $('provider').dispatchEvent(new Event('change')); $('model').value = model.id; $('connection-form').scrollIntoView({behavior: 'smooth'});
     }));
-    const source = element('a', 'Model card & current download details ↗'); source.href = model.source; source.target = '_blank'; source.rel = 'noopener noreferrer'; card.append(source);
+    else if (baseline.has(model.id)) card.append(button('Review model download…', () => systemAction('pull-model', model.id)));
+    if (model.source) { const source = element('a', 'Model card & current download details ↗'); source.href = model.source; source.target = '_blank'; source.rel = 'noopener noreferrer'; card.append(source); }
     return card;
   }));
-  notice(`Detected ${data.os}. Hardware fit is an estimate; connection and task evaluations remain separate.`);
+  if (recommendationError) notice(`Helper recommendation unavailable: ${recommendationError.message} Showing the offline hardware shortlist instead.`, true);
+  else if (recommendations) notice(`${recommendations.summary} No use-case benchmark has run; review each validation step.`);
+  else notice(`Detected ${data.os}. Showing the offline hardware shortlist; connect a helper for solution-aware ranking. Hardware fit is an estimate.`);
 });
 
 async function loadCatalog() {

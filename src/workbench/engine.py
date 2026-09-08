@@ -10,7 +10,7 @@ import yaml
 
 from src.blueprint import learning, specs, workflow
 from src.blueprint.models import Decomposition, Design, UseCase
-from src.workbench.contracts import Advice, Implementation
+from src.workbench.contracts import Advice, Implementation, ModelRecommendations
 from src.workbench.runtime import SUFFIXES, source_digest, source_snapshot
 from src.workbench.security import WorkbenchError, local_path, no_secrets
 from src.workbench.system import inspect_system
@@ -256,6 +256,50 @@ class Engine:
             data,
         )
         return {**advice.model_dump(), "usage": usage}
+
+    def recommend_models(self, connection, solution=None):
+        machine = inspect_system(self.root)
+        provider_models = self.providers.models(
+            connection.provider, connection.api_key.get_secret_value()
+        )["models"]
+        data = {
+            "connected_helper": {"provider": connection.provider, "model": connection.model},
+            "account_available_provider_models": provider_models,
+            "hardware_and_local_tools": machine,
+            "decision_scope": "Models for building and running this solution; no benchmark has run.",
+        }
+        if solution:
+            data["specifications"] = self.artifacts(specs.safe_solution(self.root, solution))
+        recommendation, usage = self.providers.generate(
+            connection,
+            ModelRecommendations,
+            "Recommend and rank models for the supplied solution and machine. You may name only IDs from account_available_provider_models, local_models, or installed_models; do not invent model IDs. Prefer a small useful shortlist and omit unsuitable candidates. Distinguish provider account availability, local memory estimates, connection compatibility, and unperformed task-quality benchmarks. Treat fits_estimate only as capacity screening. An installed local model without a catalog memory estimate must remain conditional. For every candidate prescribe a representative task evaluation before production selection. If specifications are absent, say the recommendation is workspace-level and conditional.",
+            data,
+        )
+        local = {entry["id"] for entry in machine["local_models"]} | set(
+            machine["installed_models"]
+        )
+        allowed = local | set(provider_models)
+        names = [candidate.model for candidate in recommendation.candidates]
+        if len(names) != len(set(names)) or not set(names) <= allowed:
+            raise WorkbenchError(
+                "The helper returned an unknown or duplicate model candidate. Review provider availability and retry."
+            )
+        for candidate in recommendation.candidates:
+            expected = (
+                "local" if candidate.model in local or connection.provider == "ollama" else "cloud"
+            )
+            if candidate.deployment != expected:
+                raise WorkbenchError(
+                    "The helper misclassified a model deployment boundary. Review and retry."
+                )
+        return {
+            **recommendation.model_dump(),
+            "source": "connected-helper",
+            "solution": solution,
+            "hardware": machine,
+            "usage": usage,
+        }
 
     def run(self, name, body, connection, job_id):
         if not body.confirmed:

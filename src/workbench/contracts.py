@@ -23,6 +23,10 @@ class ModelList(Contract):
     api_key: SecretStr = SecretStr("")
 
 
+class ModelRecommendationRequest(Contract):
+    solution: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
+
+
 class Brief(Contract):
     name: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
     problem: str = Field(min_length=30, max_length=16000)
@@ -141,3 +145,18 @@ class Advice(Contract):
     answer: str = Field(min_length=1, max_length=12000)
     next_steps: list[str] = Field(max_length=12)
     limitations: list[str] = Field(max_length=12)
+
+
+class ModelCandidate(Contract):
+    model: str = Field(min_length=1, max_length=120)
+    deployment: Literal["local", "cloud"]
+    recommendation: Literal["recommended", "conditional", "not-recommended"]
+    best_for: str = Field(min_length=10, max_length=500)
+    rationale: str = Field(min_length=20, max_length=1000)
+    validation: str = Field(min_length=20, max_length=1000)
+
+
+class ModelRecommendations(Contract):
+    summary: str = Field(min_length=20, max_length=1500)
+    candidates: list[ModelCandidate] = Field(min_length=1, max_length=6)
+    limitations: list[str] = Field(min_length=1, max_length=8)

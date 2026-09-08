@@ -20,6 +20,7 @@ from src.workbench.contracts import (
     Brief,
     Connection,
     ModelList,
+    ModelRecommendationRequest,
     Question,
     RunRequest,
     SpecEdit,
@@ -218,6 +219,11 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
     @app.get("/api/system", dependencies=[Depends(authenticated)])
     def system():
         return inspect_system(root)
+
+    @app.post("/api/system/recommendations")
+    def system_recommendations(body: ModelRecommendationRequest, session=Depends(authenticated)):
+        conn = connection(session)
+        return engine.recommend_models(conn, body.solution)
 
     @app.get("/api/providers", dependencies=[Depends(authenticated)])
     def provider_list():

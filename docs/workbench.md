@@ -85,6 +85,16 @@ paths are included in that hardware summary. Failed acceptance results are retai
 and provided to the next attempt at the same task. A failed check is shown as
 **needs attention**, never as a completed engineering task.
 
+**Environment-based model guidance:** Detect environment always performs the local,
+deterministic RAM/disk/tool screen first. Without a connected helper it displays the
+maintained offline shortlist. With a connected helper it sends that hardware summary
+and, when selected, the solution specifications to the consented provider. The helper
+ranks only account-listed provider models and supplied/installed local candidates,
+may omit unsuitable choices, and provides a validation step for each. This is
+advisory: memory fit,
+connection/schema compatibility and use-case benchmark quality are separate evidence.
+No model is automatically installed or selected by this recommendation.
+
 ## Components and trust boundaries
 
 ```mermaid

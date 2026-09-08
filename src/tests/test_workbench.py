@@ -94,6 +94,29 @@ class ModelFixture:
                 "manual_steps": [],
                 "summary": "A small synthetic implementation used solely to verify orchestration mechanics.",
             }
+        elif "candidates" in properties:
+            output = {
+                "summary": "Use the connected helper for demanding work and validate the smaller local candidate on representative tasks.",
+                "candidates": [
+                    {
+                        "model": "test-model",
+                        "deployment": "cloud",
+                        "recommendation": "recommended",
+                        "best_for": "Specification and implementation work for this solution.",
+                        "rationale": "The connected model passed schema compatibility, while solution quality remains unmeasured.",
+                        "validation": "Run capability extraction and grounded-answer acceptance cases before selecting it.",
+                    },
+                    {
+                        "model": "qwen3:4b",
+                        "deployment": "local",
+                        "recommendation": "conditional",
+                        "best_for": "Private drafts and small local experiments.",
+                        "rationale": "The deterministic screen estimates sufficient memory but does not establish output quality.",
+                        "validation": "Run the same acceptance set and measure latency, abstention, and structured-output success.",
+                    },
+                ],
+                "limitations": ["No use-case benchmark has been executed."],
+            }
         else:
             output = {
                 "answer": "Compare task acceptance before choosing a model.",
@@ -223,6 +246,40 @@ def test_catalog_exposes_production_rag_guidance(workbench):
         "trustworthy evidence boundary"
         in client.get("/api/catalog/content", params={"item": interview}).json()["content"]
     )
+
+
+def test_environment_uses_offline_baseline_without_connected_helper(workbench):
+    client, _, model = workbench
+    pair(client)
+    response = client.get("/api/system")
+    assert response.status_code == 200
+    assert {item["id"] for item in response.json()["local_models"]} == {
+        "qwen3:4b",
+        "qwen3:8b",
+    }
+    assert model.calls == []
+
+
+def test_connected_helper_ranks_hardware_candidates_for_selected_solution(workbench):
+    client, _, model = workbench
+    pair(client)
+    connect(client)
+    calls_before = len(model.calls)
+    response = client.post(
+        "/api/system/recommendations",
+        json={"solution": "government-tender-processing"},
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["source"] == "connected-helper"
+    assert result["solution"] == "government-tender-processing"
+    assert [item["model"] for item in result["candidates"]] == ["test-model", "qwen3:4b"]
+    assert len(model.calls) == calls_before + 2
+    request = json.loads(model.calls[-1].content)
+    supplied = json.loads(request["messages"][1]["content"])
+    assert "specifications" in supplied
+    assert supplied["hardware_and_local_tools"]["local_models"]
+    assert FAKE_KEY not in model.calls[-1].content.decode()
 
 
 def test_keys_are_not_echoed_stored_or_reused_without_consent(workbench):
