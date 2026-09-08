@@ -41,6 +41,7 @@ jobs:
       - run: python -m ruff format --check src scripts
       - run: bash -n workbench.sh
       - run: node --check src/workbench/ui/app.js && node --check src/tender/ui/app.js
+      - run: node --test src/tests/workbench-session.test.cjs
       - run: python -m pytest -q
       - run: python -m src.evals.eval_harness
       - run: python -m scripts.validate_repo

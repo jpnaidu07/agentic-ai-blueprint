@@ -3,6 +3,17 @@
 const $ = id => document.getElementById(id);
 const state = {csrf: '', sessionToken: '', connected: false, provider: '', model: '', solutions: [], selected: null, detail: null, catalog: [], activeRun: null, view: 'home', timer: null};
 const labels = {home: 'Overview', setup: 'Setup & models', solutions: 'Solutions', library: 'Specs & skills', runs: 'Run history', apps: 'Applications'};
+const sessionKey = 'blueprint.workbench.session.v1';
+// Tab- and origin-scoped: never persist provider keys, pairing tokens or role tokens.
+function readSession() {
+  try { return JSON.parse(sessionStorage.getItem(sessionKey) || 'null'); } catch { return null; }
+}
+function rememberSession() {
+  if (!state.sessionToken) return;
+  try {
+    sessionStorage.setItem(sessionKey, JSON.stringify({token: state.sessionToken, view: state.view, selected: state.selected, activeRun: state.activeRun, configuration: {max_tokens: Number($('max-tokens').value), context_window: Number($('context-window').value)}}));
+  } catch { notice('Browser storage is unavailable. This session works, but refresh will require pairing again.', true); }
+}
 
 function element(tag, text, className) {
   const result = document.createElement(tag);
@@ -42,7 +53,7 @@ async function api(path, options = {}) {
   const response = await fetch(path, {...options, body, headers, credentials: 'omit'});
   const data = await response.json();
   if (!response.ok) {
-    if (response.status === 401 && path !== '/api/session') lock();
+    if (response.status === 401 && !(path === '/api/session' && options.method === 'POST')) lock();
     throw new Error(typeof data.detail === 'string' ? data.detail : 'Request failed. Check required fields.');
   }
   return data;
@@ -55,21 +66,36 @@ function syncConnection(data) {
   $('stat-model').textContent = state.connected ? state.provider : 'Not set';
   $('provider-status').classList.toggle('green', state.connected);
   $('connection-dot').classList.toggle('connected', state.connected);
+  if (state.connected) {
+    $('provider').value = state.provider;
+    $('model').value = state.model;
+    $('key-label').hidden = state.provider === 'ollama';
+    $('provider-docs').href = providerDocs[state.provider];
+    $('provider-consent').checked = true;
+    if (data.max_tokens) $('max-tokens').value = data.max_tokens;
+    if (data.context_window) $('context-window').value = data.context_window;
+  }
 }
 function lock() {
   clearTimeout(state.timer);
+  try { sessionStorage.removeItem(sessionKey); } catch { /* Storage can be disabled. */ }
   state.csrf = '';
   state.sessionToken = '';
+  state.selected = null;
+  state.detail = null;
+  state.activeRun = null;
   $('workspace').hidden = true;
   $('pairing').hidden = false;
   $('disconnect-session').hidden = true;
   $('api-key').value = '';
   $('role-tokens').replaceChildren();
+  $('connection-result').hidden = true;
   syncConnection({connected: false});
 }
 async function unlock(data) {
   state.csrf = data.csrf;
   state.sessionToken = data.session_token || state.sessionToken;
+  rememberSession();
   syncConnection(data);
   $('pairing').hidden = true;
   $('workspace').hidden = false;
@@ -78,6 +104,7 @@ async function unlock(data) {
 }
 async function show(view) {
   state.view = view;
+  rememberSession();
   Object.keys(labels).forEach(key => $(`view-${key}`).hidden = key !== view);
   document.querySelectorAll('nav [data-view]').forEach(control => {
     control.classList.toggle('active', control.dataset.view === view);
@@ -128,6 +155,7 @@ submit('connection-form', async () => {
   try {
     const data = await api('/api/connection', {method: 'POST', body});
     syncConnection({connected: true, provider: data.provider, model: data.model});
+    rememberSession();
     $('connection-result').textContent = `Structured output verified · ${data.latency_ms} ms\n${data.quality_benchmark}\nUsage: ${JSON.stringify(data.usage)}`;
     $('connection-result').hidden = false;
     notice('Model connected. You can now generate capabilities or ask for advice.');
@@ -204,6 +232,7 @@ submit('brief-form', async () => {
 async function selectSolution(name) {
   const data = await api(`/api/solutions/${encodeURIComponent(name)}`);
   state.selected = name; state.detail = data;
+  rememberSession();
   document.querySelectorAll('.solution-choice').forEach((control, i) => control.classList.toggle('active', state.solutions[i]?.name === name));
   renderSolution(data);
 }
@@ -307,7 +336,7 @@ async function watch(id) {
 async function loadRuns() {
   const runs = await api('/api/jobs');
   $('run-list').replaceChildren(...runs.map(job => {
-    const control=button('',async()=>{state.activeRun=job.id;renderRun(await api(`/api/jobs/${job.id}`));if(job.state==='running')await watch(job.id);},`run-choice${state.activeRun===job.id?' active':''}`);
+    const control=button('',async()=>{state.activeRun=job.id;rememberSession();renderRun(await api(`/api/jobs/${job.id}`));if(job.state==='running')await watch(job.id);},`run-choice${state.activeRun===job.id?' active':''}`);
     control.append(element('strong',`${job.kind} · ${job.state}`),element('small',`${job.solution || 'Workspace advice'}\n${new Date(job.created).toLocaleString()}`));return control;
   }));
   if (!runs.length) $('run-list').append(element('p','No runs yet. Connect a model and create a solution, or launch the reference app.','subtle'));
@@ -367,4 +396,25 @@ async function loadApps(){
   if(!apps.length)$('app-list').append(element('p','No managed apps are running. Launch the reference above, or launch a verified solution from its workspace.','subtle'));
 }
 
-(async()=>{try{await unlock(await api('/api/session'));}catch{lock();}})();
+async function restoreSession() {
+  const saved = readSession();
+  if (!saved || typeof saved.token !== 'string' || !saved.token) { lock(); return; }
+  state.sessionToken = saved.token;
+  try {
+    const info = await api('/api/session');
+    await unlock({...saved.configuration, ...info});
+  } catch (error) {
+    // Keep a valid tab session on temporary network failures; only 401/log out clears it.
+    if (!state.sessionToken) lock();
+    notice('Could not restore the workspace. If the server restarted or the session expired, pair again. Otherwise retry refresh. Saved solutions and runs remain on disk.', true);
+    return;
+  }
+  try {
+    if (saved.selected && state.solutions.some(item => item.name === saved.selected)) await selectSolution(saved.selected);
+    state.activeRun = typeof saved.activeRun === 'string' ? saved.activeRun : null;
+    await show(Object.hasOwn(labels, saved.view) ? saved.view : 'home');
+    if (state.view === 'runs' && state.activeRun) await watch(state.activeRun);
+    notice(state.connected ? `Workspace restored with ${state.provider} / ${state.model}.` : 'Workspace restored.');
+  } catch (error) { notice(error.message || 'Workspace restored; reload the selected page.', true); }
+}
+restoreSession();

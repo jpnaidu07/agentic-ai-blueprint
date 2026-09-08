@@ -25,7 +25,7 @@
     <section id="pairing" class="pairing card">
       <span class="eyebrow">A PRIVATE WORKSPACE ON YOUR COMPUTER</span><h1>Connect your browser.</h1><p>Paste the pairing token printed in the terminal when you started this server. It protects your local files, model connections and system actions.</p>
       <form id="pair-form"><label for="pair-token">Local pairing token</label><div class="inline"><input id="pair-token" type="password" required autocomplete="off" placeholder="Token from your terminal"><button class="primary">Unlock workspace →</button></div></form>
-      <p class="subtle">Need to start it? Run <code>./workbench.ps1</code> on Windows or <code>bash workbench.sh</code> on macOS/Linux. API keys are entered separately and remain in server memory. Refreshing the browser requires pairing again; no session credential is stored in cookies or browser storage.</p>
+      <p class="subtle">Need to start it? Run <code>./workbench.ps1</code> on Windows or <code>bash workbench.sh</code> on macOS/Linux. Refresh resumes this tab's session and model connection. Only the short-lived session token and navigation choices are kept in this tab; API keys remain on the server. Lock workspace clears the tab session. After server restart or session expiry, pair again. Saved solutions and runs remain on disk.</p>
     </section>
     <div id="workspace" hidden>
     <section id="view-home" class="view">

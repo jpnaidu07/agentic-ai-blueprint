@@ -247,6 +247,23 @@ def test_keys_are_not_echoed_stored_or_reused_without_consent(workbench):
     assert all(request.url.host == "api.openai.com" for request in model.calls)
 
 
+def test_session_resume_keeps_connection_without_new_probe_and_logout_revokes_it(workbench):
+    client, _, model = workbench
+    credentials = pair(client)
+    connect(client)
+    calls_before = len(model.calls)
+    resumed = client.get("/api/session")
+    assert resumed.status_code == 200
+    assert resumed.json()["connected"] is True
+    assert resumed.json()["model"] == "test-model"
+    assert resumed.json()["csrf"] == credentials["csrf"]
+    assert FAKE_KEY not in resumed.text
+    assert "set-cookie" not in resumed.headers
+    assert len(model.calls) == calls_before
+    assert client.delete("/api/session").status_code == 200
+    assert client.get("/api/session").status_code == 401
+
+
 def test_model_backed_stages_generation_and_verification_are_distinct(workbench):
     client, root, _ = workbench
     pair(client)

@@ -25,12 +25,19 @@ printed in your terminal into the UI. Do not share the token or expose the port.
 Ctrl+C stops the workbench and processes/containers it manages. For an already
 installed checkout, `python -m src.workbench.server` starts without reinstalling.
 
-Pairing uses a random session bearer token and CSRF token held only in browser
-memory. There are no session cookies or localStorage/sessionStorage credentials:
-cookies are not port-scoped and could leak to a generated app on another local
-port. Refreshing the browser requires pairing again. Server sessions expire after
-eight hours; disconnect or restart to release API keys earlier. An in-flight call
-retains its key until it returns at its bounded safe cancellation point.
+Pairing stores the short-lived session bearer token and navigation choices in
+tab-scoped sessionStorage. Refresh verifies that token with the server and restores
+the model connection, selected solution, page and selected run. Provider API keys,
+the initial pairing token and app role tokens are never saved in browser storage.
+Cookies are not used because they are not port-scoped; sessionStorage is scoped to
+the Workbench origin (including its port). No localStorage is used.
+
+Lock workspace clears the saved tab session and revokes it on the server. Server
+restart or the eight-hour session expiry requires pairing and connecting the model
+again. Saved solutions and run history remain on disk. Unsaved form/editor text is
+not autosaved by session restoration: save specifications before refreshing.
+Browser settings can disable storage; the UI then explains that refresh will need
+pairing. An in-flight call retains its key until its bounded cancellation point.
 
 ## Walk through the UI
 

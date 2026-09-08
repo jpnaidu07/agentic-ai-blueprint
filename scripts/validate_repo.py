@@ -37,6 +37,7 @@ def main():
             ".json",
             ".svg",
             ".js",
+            ".cjs",
             ".html",
             ".txt",
             ".ps1",
