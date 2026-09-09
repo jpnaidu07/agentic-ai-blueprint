@@ -27,6 +27,15 @@ class FakeRuntime(Runtime):
     verifications = 0
     test_exit_code = 0
 
+    def application_model(self, solution):
+        # Lifecycle has its own tests; orchestration consumes a measured-config fixture.
+        return {
+            "provider": "ollama",
+            "model": "synthetic-local",
+            "base_url": "http://127.0.0.1:11434/v1",
+            "embedding_model": "synthetic-embedding",
+        }
+
     def runner_ready(self):
         return "intercepted-docker"
 
@@ -99,8 +108,8 @@ class ModelFixture:
                 "summary": "Use the connected helper for demanding work and validate the smaller local candidate on representative tasks.",
                 "candidates": [
                     {
-                        "model": "test-model",
-                        "deployment": "cloud",
+                        "model": "qwen3:8b",
+                        "deployment": "local",
                         "recommendation": "recommended",
                         "best_for": "Specification and implementation work for this solution.",
                         "rationale": "The connected model passed schema compatibility, while solution quality remains unmeasured.",
@@ -260,6 +269,24 @@ def test_environment_uses_offline_baseline_without_connected_helper(workbench):
     assert model.calls == []
 
 
+def test_local_lifecycle_profile_does_not_require_helper(workbench):
+    client, root, model = workbench
+    pair(client)
+    (root / "solutions/local-exercise").mkdir()
+    profile = json.loads((ROOT / "templates/local-model-profile.json").read_text())
+    assert client.put("/api/solutions/local-exercise/models", json=profile).status_code == 200
+    result = client.get("/api/solutions/local-exercise/models").json()
+    assert result["profile"]["inference_model"] == "qwen3:4b"
+    assert result["approval"] is None
+    assert not model.calls
+    assert (
+        client.post(
+            "/api/solutions/local-exercise/models/train", json={"confirmed": False}
+        ).status_code
+        == 409
+    )
+
+
 def test_connected_helper_ranks_hardware_candidates_for_selected_solution(workbench):
     client, _, model = workbench
     pair(client)
@@ -273,8 +300,8 @@ def test_connected_helper_ranks_hardware_candidates_for_selected_solution(workbe
     result = response.json()
     assert result["source"] == "connected-helper"
     assert result["solution"] == "government-tender-processing"
-    assert [item["model"] for item in result["candidates"]] == ["test-model", "qwen3:4b"]
-    assert len(model.calls) == calls_before + 2
+    assert [item["model"] for item in result["candidates"]] == ["qwen3:8b", "qwen3:4b"]
+    assert len(model.calls) == calls_before + 1
     request = json.loads(model.calls[-1].content)
     supplied = json.loads(request["messages"][1]["content"])
     assert "specifications" in supplied
@@ -604,6 +631,20 @@ def test_generated_path_boundaries(tmp_path, path):
 
 def test_real_tender_launch_health_roles_and_no_model_transfer(tmp_path):
     runtime = Runtime(ROOT, tmp_path)
+    runtime.local_models = type(
+        "ApprovedModels",
+        (),
+        {
+            "approved": lambda _self, _name: {
+                "provider": "ollama",
+                "model": "qwen3:4b",
+                "base_url": "http://127.0.0.1:11434/v1",
+                "context_window": 4096,
+                "max_tokens": 256,
+                "embedding_model": "embeddinggemma",
+            }
+        },
+    )()
     try:
         result = runtime.launch_tender()
         url = result["url"]

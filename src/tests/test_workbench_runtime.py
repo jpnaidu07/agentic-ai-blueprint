@@ -2,7 +2,10 @@
 
 import json
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -96,3 +99,81 @@ def test_real_isolated_tests_preview_health_and_stale_source(tmp_path):
         assert not runtime.running(managed)
     finally:
         runtime.close()
+
+
+def test_isolated_preview_reaches_only_approved_local_model(tmp_path):
+    """Exercise real Docker networking through the authenticated inference gateway."""
+
+    class LocalModel(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            assert self.path == "/v1/chat/completions"
+            assert body["model"] == "local-test-model"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(
+                json.dumps({"choices": [{"message": {"content": "local-model-response"}}]}).encode()
+            )
+
+        def log_message(self, *args):
+            pass
+
+    upstream = ThreadingHTTPServer(("127.0.0.1", 0), LocalModel)
+    threading.Thread(target=upstream.serve_forever, daemon=True).start()
+    path = specs.create(tmp_path, ROOT / "templates/use-case.yaml")
+    specs.approve(path, "gateway-test-reviewer")
+    source = path / "implementation/runtime"
+    (source / "tests").mkdir(parents=True)
+    (source / "app.py").write_text(
+        "import os,httpx\nfrom fastapi import FastAPI\napp=FastAPI()\n"
+        "@app.get('/api/health')\ndef health(): return {'status':'ok'}\n"
+        "@app.get('/api/model')\ndef model():\n"
+        "    r=httpx.post(os.environ['LLM_BASE_URL']+'/chat/completions',headers={'Authorization':'Bearer '+os.environ['LLM_API_KEY']},json={'model':os.environ['LLM_MODEL'],'messages':[{'role':'user','content':'local test'}]},timeout=15,trust_env=False)\n"
+        "    r.raise_for_status()\n    return r.json()\n"
+    )
+    (source / "tests/test_health.py").write_text(
+        "from fastapi.testclient import TestClient\nfrom app import app\ndef test_health(): assert TestClient(app).get('/api/health').status_code==200\n"
+    )
+    state = tmp_path / ".workbench"
+    state.mkdir()
+    runtime = Runtime(tmp_path, state)
+    runtime.local_models = SimpleNamespace(
+        approved=lambda name: {
+            "provider": "openai-compatible",
+            "model": "local-test-model",
+            "base_url": f"http://127.0.0.1:{upstream.server_port}/v1",
+            "embedding_model": "embedding-test",
+            "context_window": 4096,
+            "max_tokens": 128,
+        }
+    )
+    (path / "models").mkdir()
+    (path / "models/profile.json").write_text("{}")
+    try:
+        tested = runtime.verify(path.name)
+        assert tested["exit_code"] == 0, tested["output"]
+        ledger = state / "verified" / f"{path.name}.json"
+        ledger.parent.mkdir()
+        ledger.write_text(
+            json.dumps(
+                {"source_digest": tested["source_digest"], "spec_digest": specs.spec_digest(path)}
+            )
+        )
+        result = runtime.launch_generated(path.name)
+        response = httpx.get(result["url"] + "/api/model", timeout=30, trust_env=False)
+        assert response.status_code == 200, response.text
+        assert response.json()["choices"][0]["message"]["content"] == "local-model-response"
+        assert (
+            httpx.post(
+                result["url"] + "/model/v1/chat/completions", json={}, trust_env=False
+            ).status_code
+            == 403
+        )
+        process = runtime.apps[path.name]["gateway_process"]
+        runtime.stop(path.name)
+        assert process.poll() is not None
+    finally:
+        runtime.close()
+        upstream.shutdown()
+        upstream.server_close()

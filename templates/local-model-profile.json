@@ -1,0 +1,18 @@
+{
+  "inference_model": "qwen3:4b",
+  "embedding_model": "embeddinggemma",
+  "context_window": 4096,
+  "max_tokens": 128,
+  "minimum_accuracy": 0.8,
+  "maximum_latency_seconds": 60,
+  "training": [
+    {"prompt": "Evidence: The submission deadline is 2 March. Return only the date.", "answer": "2 March", "category": "extraction"},
+    {"prompt": "Evidence: No warranty length is stated. Return the warranty or UNKNOWN.", "answer": "UNKNOWN", "category": "abstention"},
+    {"prompt": "Evidence: Offer P is 30 and offer Q is 90. Return the cheaper offer letter only.", "answer": "P", "category": "comparison"}
+  ],
+  "evaluation": [
+    {"prompt": "Evidence: The submission deadline is 12 May. Return only the date.", "answer": "12 May", "category": "extraction"},
+    {"prompt": "Evidence: The document gives no delivery date. Return the date or UNKNOWN.", "answer": "UNKNOWN", "category": "abstention"},
+    {"prompt": "Evidence: Offer A is 40 and offer B is 70. Return the cheaper offer letter only.", "answer": "A", "category": "comparison"}
+  ]
+}

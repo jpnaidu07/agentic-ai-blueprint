@@ -6,6 +6,7 @@ No CONNECT, arbitrary destinations, redirects, WebSockets or shell access.
 
 import os
 import re
+import secrets
 
 import httpx
 from fastapi import FastAPI, Request
@@ -36,6 +37,42 @@ def clean_headers(headers):
 
 @app.api_route("/{path:path}", methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
 async def relay(path: str, request: Request):
+    if path in {"model/v1/chat/completions", "model/v1/embeddings"}:
+        token = os.getenv("MODEL_GATEWAY_TOKEN", "")
+        if (
+            not token
+            or request.method != "POST"
+            or not secrets.compare_digest(
+                request.headers.get("authorization", ""), "Bearer " + token
+            )
+        ):
+            return Response(status_code=403)
+        port = os.getenv("MODEL_GATEWAY_PORT", "")
+        if not port.isdigit() or not 1024 <= int(port) <= 65535:
+            return Response(status_code=503)
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > 64000:
+                return Response(status_code=413)
+        target = "chat" if path.endswith("completions") else "embeddings"
+        try:
+            async with httpx.AsyncClient(
+                timeout=120, trust_env=False, follow_redirects=False
+            ) as client:
+                result = await client.post(
+                    f"http://host.docker.internal:{port}/v1/{target}",
+                    content=bytes(body),
+                    headers={
+                        "authorization": "Bearer " + token,
+                        "content-type": "application/json",
+                    },
+                )
+            return Response(
+                result.content, status_code=result.status_code, media_type="application/json"
+            )
+        except httpx.HTTPError:
+            return Response("Local inference gateway is unavailable", status_code=502)
     host = os.getenv("UPSTREAM_HOST", "")
     if not re.fullmatch(r"blueprint-app-[a-f0-9]{10}-[a-z][a-z0-9-]{2,63}", host):
         return Response("Preview relay configuration is invalid.", status_code=503)

@@ -1,0 +1,7 @@
+# Separate CPU training environment; do not install into the Workbench environment.
+torch==2.8.0
+transformers==4.56.2
+peft==0.17.1
+accelerate==1.10.1
+fastapi==0.141.1
+uvicorn==0.52.4

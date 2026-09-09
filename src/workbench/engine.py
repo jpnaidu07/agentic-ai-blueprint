@@ -259,36 +259,30 @@ class Engine:
 
     def recommend_models(self, connection, solution=None):
         machine = inspect_system(self.root)
-        provider_models = self.providers.models(
-            connection.provider, connection.api_key.get_secret_value()
-        )["models"]
         data = {
             "connected_helper": {"provider": connection.provider, "model": connection.model},
-            "account_available_provider_models": provider_models,
             "hardware_and_local_tools": machine,
-            "decision_scope": "Models for building and running this solution; no benchmark has run.",
+            "decision_scope": "Local application inference only. The helper builds the solution and is not an application model candidate.",
         }
         if solution:
             data["specifications"] = self.artifacts(specs.safe_solution(self.root, solution))
         recommendation, usage = self.providers.generate(
             connection,
             ModelRecommendations,
-            "Recommend and rank models for the supplied solution and machine. You may name only IDs from account_available_provider_models, local_models, or installed_models; do not invent model IDs. Prefer a small useful shortlist and omit unsuitable candidates. Distinguish provider account availability, local memory estimates, connection compatibility, and unperformed task-quality benchmarks. Treat fits_estimate only as capacity screening. An installed local model without a catalog memory estimate must remain conditional. For every candidate prescribe a representative task evaluation before production selection. If specifications are absent, say the recommendation is workspace-level and conditional.",
+            "Recommend local application inference models for the supplied solution and machine. Name only local_models or installed_models IDs, all deployment local. The Workbench helper is separate. Treat fits_estimate only as capacity screening. Installed models without catalog estimates must remain conditional. Explain inference vs training memory and prescribe a representative task evaluation. If specs are absent, say the recommendation is workspace-level and conditional.",
             data,
         )
         local = {entry["id"] for entry in machine["local_models"]} | set(
             machine["installed_models"]
         )
-        allowed = local | set(provider_models)
+        allowed = local
         names = [candidate.model for candidate in recommendation.candidates]
         if len(names) != len(set(names)) or not set(names) <= allowed:
             raise WorkbenchError(
                 "The helper returned an unknown or duplicate model candidate. Review provider availability and retry."
             )
         for candidate in recommendation.candidates:
-            expected = (
-                "local" if candidate.model in local or connection.provider == "ollama" else "cloud"
-            )
+            expected = "local"
             if candidate.deployment != expected:
                 raise WorkbenchError(
                     "The helper misclassified a model deployment boundary. Review and retry."
@@ -322,6 +316,7 @@ class Engine:
                 "lesson": packet.read_text(encoding="utf-8"),
                 "outcome": "reference-ready-to-explore",
             }
+        application_model = self.runtime.application_model(name)
         if body.execute:
             self.runtime.runner_ready()
         tasks = {t.id: t for t in specs.validate(path)[2].tasks}
@@ -360,6 +355,8 @@ class Engine:
                     "specifications": self.artifacts(path),
                     "existing_source": before,
                     "previous_attempt": previous,
+                    "application_local_model": application_model,
+                    "application_model_instructions": "When application_local_model is set, call the application's own model using LLM_BASE_URL, LLM_MODEL, LLM_API_KEY, LLM_EMBEDDING_MODEL environment variables. The helper's connection is never the application model. Use httpx for chat and embeddings; use mocked HTTP in offline tests. Treat inability to connect as a visible error.",
                     "available_dependencies": (self.root / "requirements-dev.txt").read_text()
                     + (self.root / "requirements.txt").read_text(),
                 },

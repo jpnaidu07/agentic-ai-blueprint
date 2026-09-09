@@ -272,7 +272,7 @@ Docker Compose application plus PostgreSQL for development; optional local Ollam
 
 ## Model Selection
 
-Default to an explicitly configured cloud provider after residency approval; require structured-output capability and evaluate extraction on golden evidence. Support OpenAI, Azure, Anthropic and Gemini compatibility endpoints plus optional Ollama. Do not hard-code a model, price, or benchmark claim.
+Keep the Workbench helper separate from application inference. Select local inference and embedding models from hardware-compatible candidates; deploy, evaluate held-out tasks, fine-tune when justified, compare checkpoints and approve the measured configuration before application use. Never infer training compatibility from inference memory fit.
 
 ## Open Questions
 

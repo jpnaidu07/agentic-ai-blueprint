@@ -28,6 +28,7 @@ from src.workbench.contracts import (
 )
 from src.workbench.engine import Engine
 from src.workbench.jobs import Jobs
+from src.workbench.local_models import LifecycleAction, LocalModels, LocalProfile, save_profile
 from src.workbench.providers import PROVIDERS, Providers
 from src.workbench.runtime import Runtime
 from src.workbench.security import Sessions, WorkbenchError, local_path
@@ -76,6 +77,8 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
     runtime = runtime_factory(root, state)
     providers = providers or Providers()
     engine = Engine(root, state, providers, jobs, runtime)
+    local_models = LocalModels(root, state, runtime, jobs)
+    runtime.local_models = local_models
 
     @asynccontextmanager
     async def lifespan(app):
@@ -229,6 +232,71 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
     def provider_list():
         return PROVIDERS
 
+    @app.get("/api/solutions/{name}/models", dependencies=[Depends(authenticated)])
+    def model_status(name: str):
+        return local_models.status(name)
+
+    @app.put("/api/solutions/{name}/models", dependencies=[Depends(authenticated)])
+    def model_profile(name: str, body: LocalProfile):
+        with jobs.lock:
+            idle()
+            return save_profile(root, name, body)
+
+    @app.post("/api/solutions/{name}/models/{action}", dependencies=[Depends(authenticated)])
+    def model_action(name: str, action: str, body: LifecycleAction):
+        if not body.confirmed:
+            raise WorkbenchError("Review and confirm the model action and resource use.")
+        if action == "approve":
+            with jobs.lock:
+                idle()
+                return local_models.approve(name, body.report_id)
+        if action == "all":
+
+            def lifecycle(job):
+                results = {}
+                for operation in (
+                    "download",
+                    "evaluate",
+                    "install-training",
+                    "train",
+                    "serve-trained",
+                    "evaluate-trained",
+                ):
+                    jobs.check_cancelled()
+                    jobs.event(job, f"Local model lifecycle: {operation}")
+                    result = (
+                        local_models.evaluate(name, job, operation == "evaluate-trained")
+                        if operation.startswith("evaluate")
+                        else runtime.model_action(name, operation)
+                    )
+                    results[operation] = result
+                    if (
+                        result.get("exit_code", 0) != 0
+                        or result.get("outcome") == "needs-attention"
+                    ):
+                        return {
+                            "outcome": "needs-attention",
+                            "message": f"Resolve {operation} before continuing.",
+                            "results": results,
+                        }
+                return {
+                    "message": "Lifecycle run finished. Compare reports and approve a passing configuration in the solution panel.",
+                    "results": results,
+                }
+
+            return jobs.start("local-model-lifecycle", name, lifecycle)
+        if action in {"evaluate", "evaluate-trained"}:
+            return jobs.start(
+                "local-model-evaluation",
+                name,
+                lambda job: local_models.evaluate(name, job, action == "evaluate-trained"),
+            )
+        if action in {"install-training", "inspect-training", "download", "train", "serve-trained"}:
+            return jobs.start(
+                "local-model-" + action, name, lambda job: runtime.model_action(name, action)
+            )
+        raise HTTPException(404, "Unknown model lifecycle action")
+
     @app.post("/api/providers/models")
     def provider_models(body: ModelList, session=Depends(authenticated)):
         return providers.models(body.provider, body.api_key.get_secret_value())
@@ -271,6 +339,8 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
             "docs/workbench.md",
             "docs/workflow.md",
             "docs/fde-learning.md",
+            "docs/local-model-lifecycle.md",
+            "templates/local-model-profile.json",
             "skills/learning-contract.md",
             "docs/providers.md",
             "README.md",

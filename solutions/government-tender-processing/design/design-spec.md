@@ -15,7 +15,7 @@ government-tender-processing
 
 ## Capability Digest
 
-79618f2ee49293733b3a3690f051b7274de7e6935f75a0789ba2414fdeb529de
+979f22e0a94809c835d9a719e547929c250649cdc6665687f91cfa8ad2fb1d6a
 
 ## Modules
 
@@ -41,10 +41,7 @@ government-tender-processing
 - number: 3
   name: Choose LLM
   decisions:
-  - Default to an explicitly configured cloud provider after residency approval; require
-    structured-output capability and evaluate extraction on golden evidence. Support
-    OpenAI, Azure, Anthropic and Gemini compatibility endpoints plus optional Ollama.
-    Do not hard-code a model, price, or benchmark claim.
+  - Keep the Workbench helper separate from application inference. Select local inference and embedding models from hardware-compatible candidates; deploy, evaluate held-out tasks, fine-tune when justified, compare checkpoints and approve the measured configuration before application use. Never infer training compatibility from inference memory fit.
   - Select provider and exact model through environment configuration.
   - Validate capabilities per model. Fail visibly; fallback must be explicitly configured
     within the approved data boundary.

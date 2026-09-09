@@ -53,24 +53,31 @@ Linux/macOS: `bash workbench.sh`. Open [http://127.0.0.1:8080](http://127.0.0.1:
 and pair using the token printed in the terminal. The launcher creates a local
 virtual environment and installs pinned dependencies; no frontend build is needed.
 
-1. **Setup & models:** inspect laptop resources, connect OpenAI/Gemini or local
-   Ollama, list available models and test structured-output compatibility. Keys
-   stay in memory. Model-fit estimates are not quality/performance guarantees.
+1. **Setup & models:** inspect laptop resources and optionally connect OpenAI or
+   Gemini as the Workbench helper. Helper keys stay in memory and are never used
+   by the generated application.
 2. **Solutions:** enter a problem statement → capability → design → decomposition.
    Inspect/edit the actual files, resolve questions and approve the current version.
 3. **Run:** explain and generate the next task, all tasks, a skill or a blueprint
    module. Enable isolated tests to verify work and unlock dependent tasks.
-4. **Applications:** launch the existing tender portal or a verified generated
-   Python preview. Prerequisites and manual steps remain visible; no success or
-   completion is invented when a step is blocked.
+4. **Local model lifecycle:** in the solution panel, define held-out cases, inspect
+   CPU/GPU support, download local chat and embedding models, evaluate, optionally
+   LoRA fine-tune, re-evaluate and explicitly approve measured results.
+5. **Applications:** launch the tender portal or a verified generated Python
+   preview. Launch requires the solution's approved local model selection.
 
-Browsing and the tender reference need neither Docker nor a model key. Generating
-new solutions needs a connected model; testing/launching generated code needs the
-Docker runner. Installing Ollama, downloading models and launching apps are separate
-confirmed actions. The current generated preview supports Python/FastAPI, same-origin
-UI and temporary local data; other stacks/external services require reviewed setup.
+Browsing needs neither Docker nor a model key. Generating new specs needs a connected
+Workbench helper; testing and launching generated code needs the Docker runner. The
+tender reference and generated applications require a separately evaluated and
+approved local application model. Installing Ollama, downloading models, training
+and launching apps are separate confirmed actions. The current generated preview
+supports Python/FastAPI, same-origin UI and temporary local data; other stacks and
+external services require reviewed setup.
 
 See the [workbench walkthrough, architecture and security boundaries](docs/workbench.md).
+The [local model lifecycle](docs/local-model-lifecycle.md) explains hardware fit,
+baseline evaluation, CPU LoRA training, held-out evaluation, approval and runtime
+isolation, including what each result proves and what it does not prove.
 
 ## Eight modules
 

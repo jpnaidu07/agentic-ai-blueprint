@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import uuid
+from pathlib import Path
 
 import httpx
 
@@ -52,6 +53,190 @@ class Runtime:
         self.apps = {}
         self.active_tests = set()
         self.owner = uuid.uuid4().hex[:10]
+
+    def training_python(self):
+        return (
+            self.state
+            / "training-venv"
+            / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        )
+
+    def local_training_url(self, solution):
+        managed = self.apps.get(f"model-{solution}")
+        if not managed or not self.running(managed):
+            raise WorkbenchError("Start the trained local model server for this solution first.")
+        return managed["url"]
+
+    def application_model(self, solution):
+        return self.local_models.approved(solution)
+
+    def model_action(self, solution, action):
+        from src.workbench.local_models import read_profile
+
+        path = specs.safe_solution(self.root, solution)
+        profile = read_profile(self.root, solution)
+        machine = inspect_system(self.root)
+        if action == "inspect-training":
+            if not self.training_python().exists():
+                raise WorkbenchError(
+                    "Install the separate training environment before testing its tensor backend."
+                )
+            result = self._bounded_command(
+                [
+                    str(self.training_python()),
+                    str(self.root / "src/workbench/train_local.py"),
+                    "inspect",
+                ],
+                30,
+            )
+            if result["exit_code"]:
+                result["outcome"] = "needs-attention"
+            return result
+        if action == "install-training":
+            if machine["disk_free_gb"] < 5:
+                raise WorkbenchError(
+                    "Free at least 5 GiB for the separate training environment and weights."
+                )
+            python = self.training_python()
+            if not python.exists():
+                result = self._bounded_command(
+                    [sys.executable, "-m", "venv", str(python.parent.parent)], 120
+                )
+                if result["exit_code"]:
+                    raise WorkbenchError("Training environment creation failed.")
+            result = self._bounded_command(
+                [
+                    str(python),
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
+                    str(self.root / "requirements-training.txt"),
+                ],
+                1800,
+            )
+            if result["exit_code"]:
+                result["outcome"] = "needs-attention"
+            return result
+        if action == "download":
+            catalog = {row["id"]: row for row in machine["local_models"]}
+            candidate = catalog.get(profile.inference_model)
+            if candidate and not candidate["fits_estimate"]:
+                raise WorkbenchError("The inference model exceeds the estimated RAM/disk budget.")
+            if not candidate and profile.inference_model not in machine["installed_models"]:
+                raise WorkbenchError(
+                    "For models outside the maintained catalog, review the model card and install with Ollama first; then select the installed ID."
+                )
+            if (
+                profile.embedding_model != "embeddinggemma"
+                and profile.embedding_model not in machine["installed_models"]
+            ):
+                raise WorkbenchError(
+                    "Install and review the alternative embedding model in Ollama first."
+                )
+            if (machine["available_ram_gb"] or 0) < 4 or machine["disk_free_gb"] < 5:
+                raise WorkbenchError(
+                    "Free at least 4 GiB RAM and 5 GiB disk before downloading models."
+                )
+            for model in (profile.inference_model, profile.embedding_model):
+                # Pulls are explicitly user-selected IDs, never helper-generated shell commands.
+                response = httpx.post(
+                    "http://127.0.0.1:11434/api/pull",
+                    json={"model": model, "stream": False},
+                    timeout=600,
+                    trust_env=False,
+                )
+                response.raise_for_status()
+                if response.json().get("status") != "success":
+                    raise WorkbenchError("Model download did not complete.")
+            return {
+                "message": "Downloaded the application's inference and embedding models. Run baseline evaluation next."
+            }
+        directory = local_path(self.state, f"local-models/{solution}")
+        directory.mkdir(parents=True, exist_ok=True)
+        if action == "train":
+            if not self.training_python().exists():
+                raise WorkbenchError("Install the separate training environment first.")
+            training_ram = {
+                "HuggingFaceTB/SmolLM2-135M-Instruct": 4,
+                "HuggingFaceTB/SmolLM2-360M-Instruct": 6,
+                "Qwen/Qwen3-0.6B": 10,
+            }[profile.training_model]
+            if (machine["available_ram_gb"] or 0) < training_ram:
+                raise WorkbenchError(
+                    f"Selected CPU training profile requires at least {training_ram} GiB currently available RAM. Close workloads or select a smaller training model."
+                )
+            if len(profile.training) < 3:
+                raise WorkbenchError("Provide at least three reviewed training examples.")
+            self.stop(f"model-{solution}")
+            output = directory / f"training-{uuid.uuid4().hex}"
+            result = self._bounded_command(
+                [
+                    str(self.training_python()),
+                    str(self.root / "src/workbench/train_local.py"),
+                    "train",
+                    "--profile",
+                    str(path / "models/profile.json"),
+                    "--output",
+                    str(output),
+                    "--steps",
+                    str(profile.training_steps),
+                ],
+                1800,
+            )
+            if result["exit_code"]:
+                return {
+                    **result,
+                    "outcome": "needs-attention",
+                    "message": "Training failed; inspect the process output. No checkpoint was promoted.",
+                }
+            report = json.loads((output / "report.json").read_text())
+            report["profile_digest"] = specs.digest(profile.model_dump())
+            (directory / "training.json").write_text(json.dumps(report), encoding="utf-8")
+            return report
+        if action == "serve-trained":
+            if not (directory / "training.json").exists():
+                raise WorkbenchError("Complete local training before serving the exported model.")
+            record = json.loads((directory / "training.json").read_text())
+            artifact = Path(record["artifact"])
+            if not artifact.resolve().is_relative_to(directory.resolve()):
+                raise WorkbenchError(
+                    "Training artifact must remain within the solution training directory."
+                )
+            self.stop(f"model-{solution}")
+            port = self.free_port()
+            process = subprocess.Popen(
+                [
+                    str(self.training_python()),
+                    str(self.root / "src/workbench/train_local.py"),
+                    "serve",
+                    "--output",
+                    str(artifact),
+                    "--port",
+                    str(port),
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            url = f"http://127.0.0.1:{port}"
+            self.apps[f"model-{solution}"] = {"process": process, "kind": "process", "url": url}
+            for _ in range(60):
+                if process.poll() is not None:
+                    break
+                try:
+                    if httpx.get(url + "/health", timeout=1, trust_env=False).status_code == 200:
+                        return {
+                            "message": "Trained local model is serving. Evaluate it on the same held-out examples before approval.",
+                            "url": url,
+                        }
+                except httpx.HTTPError:
+                    pass
+                time.sleep(0.5)
+            self.stop(f"model-{solution}")
+            raise WorkbenchError("Trained model server did not become ready.")
+        raise WorkbenchError("Unknown local model action")
 
     def docker(self):
         docker = executable("docker")
@@ -348,6 +533,19 @@ class Runtime:
                 "PYTHONUNBUFFERED": "1",
             }
         )
+        config = self.local_models.approved("government-tender-processing")
+        env.update(
+            {
+                "ALLOW_DOCUMENT_LLM": "true",
+                "LLM_PROVIDER": config["provider"],
+                "LLM_MODEL": config["model"],
+                "LLM_BASE_URL": config["base_url"],
+                "LLM_CONTEXT_WINDOW": str(config["context_window"]),
+                "LLM_MAX_TOKENS": str(config["max_tokens"]),
+                "LLM_STRUCTURED_OUTPUT": "true",
+                "LLM_EMBEDDING_MODEL": config["embedding_model"],
+            }
+        )
         process = subprocess.Popen(
             [
                 sys.executable,
@@ -426,29 +624,70 @@ class Runtime:
             if command([docker, "network", "create", "--internal", network]).returncode:
                 raise WorkbenchError("Could not create the private preview network.")
         name, port = f"blueprint-app-{self.owner}-{solution}", self.free_port()
-        args = self.sandbox_args(docker, snapshot, name) + [
-            "--detach",
-            "--network",
-            network,
-            "--tmpfs",
-            "/data:rw,noexec,nosuid,size=256m,mode=1777",
-            IMAGE,
-            "python",
-            "-m",
-            "uvicorn",
-            "app:app",
-            "--host",
-            "0.0.0.0",
-            "--port",
-            "8000",
-            "--no-access-log",
-        ]
+        proxy = f"blueprint-proxy-{self.owner}-{solution}"
+        model_env, proxy_env = [], []
+        gateway = None
+        if (path / "models/profile.json").exists():
+            configuration = self.local_models.approved(solution)
+            token, gateway_port = secrets.token_urlsafe(32), self.free_port()
+            gateway = subprocess.Popen(
+                [sys.executable, str(Path(__file__).with_name("model_gateway.py"))],
+                cwd=self.root,
+                env={
+                    **os.environ,
+                    "MODEL_GATEWAY_TOKEN": token,
+                    "MODEL_GATEWAY_PORT": str(gateway_port),
+                    "MODEL_GATEWAY_CONFIG": json.dumps(configuration),
+                },
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            for key, value in {
+                "LLM_BASE_URL": f"http://{proxy}:8080/model/v1",
+                "LLM_MODEL": configuration["model"],
+                "LLM_PROVIDER": "openai-compatible",
+                "LLM_API_KEY": token,
+                "LLM_EMBEDDING_MODEL": configuration["embedding_model"],
+            }.items():
+                model_env.extend(["--env", f"{key}={value}"])
+            proxy_env = [
+                "--add-host",
+                "host.docker.internal:host-gateway",
+                "--env",
+                f"MODEL_GATEWAY_TOKEN={token}",
+                "--env",
+                f"MODEL_GATEWAY_PORT={gateway_port}",
+            ]
+        args = (
+            self.sandbox_args(docker, snapshot, name)
+            + model_env
+            + [
+                "--detach",
+                "--network",
+                network,
+                "--tmpfs",
+                "/data:rw,noexec,nosuid,size=256m,mode=1777",
+                IMAGE,
+                "python",
+                "-m",
+                "uvicorn",
+                "app:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--no-access-log",
+            ]
+        )
         proxy = f"blueprint-proxy-{self.owner}-{solution}"
         self.apps[solution] = {
             "kind": "container",
             "name": name,
             "proxy_name": proxy,
             "url": f"http://127.0.0.1:{port}",
+            "gateway_process": gateway,
         }
         try:
             started = command(args, timeout=20).returncode == 0
@@ -487,6 +726,7 @@ class Runtime:
                             f"UPSTREAM_HOST={name}",
                             "--env",
                             "PYTHONPATH=/opt",
+                            *proxy_env,
                             IMAGE,
                             "python",
                             "-I",
@@ -531,6 +771,8 @@ class Runtime:
         )
 
     def running(self, app):
+        if app.get("gateway_process") and app["gateway_process"].poll() is not None:
+            return False
         if app["kind"] == "process":
             return app["process"].poll() is None
         docker = executable("docker")
@@ -550,6 +792,14 @@ class Runtime:
 
     def stop(self, solution):
         app = self.apps.pop(solution, None)
+        if app and app.get("gateway_process"):
+            gateway = app["gateway_process"]
+            if gateway.poll() is None:
+                gateway.terminate()
+                try:
+                    gateway.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    gateway.kill()
         if app and app["kind"] == "process":
             process = app["process"]
             if process.poll() is None:

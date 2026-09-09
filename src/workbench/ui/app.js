@@ -259,6 +259,7 @@ function check(labelText, id, checked = false) {
 function option(value, label) { const node = element('option', label); node.value = value; return node; }
 function renderSolution(data) {
   const container = $('solution-detail'); container.replaceChildren();
+  container.append(button('Local model lifecycle: deploy, evaluate & fine-tune', () => openLocalModels(data.solution), 'primary'));
   const heading = element('div', undefined, 'solution-header');
   const title = element('div'); title.append(element('span', data.reference ? 'INCLUDED REFERENCE' : 'SOLUTION WORKSPACE', 'eyebrow'), element('h2', data.solution));
   heading.append(title, element('span', data.approved ? 'Specs approved' : 'Review required', `pill ${data.approved ? 'green' : 'warn'}`)); container.append(heading);
@@ -433,3 +434,50 @@ async function restoreSession() {
   } catch (error) { notice(error.message || 'Workspace restored; reload the selected page.', true); }
 }
 restoreSession();
+
+async function openLocalModels(name) {
+  let panel = $('local-lifecycle');
+  if (!panel) { panel = element('section', undefined, 'card'); panel.id = 'local-lifecycle'; $('solution-detail').append(panel); }
+  const saved = await api(`/api/solutions/${name}/models`);
+  panel.replaceChildren(element('h2', 'Your application’s local models'), element('p', 'The Workbench helper teaches and builds. These separate models run your application on this computer. Complete the steps in order, review measured results, then approve the application configuration.'));
+  const profile = element('textarea'); profile.rows = 18;
+  profile.value = JSON.stringify(saved.profile || {
+    inference_model: 'qwen3:4b', embedding_model: 'embeddinggemma', context_window: 4096, max_tokens: 128,
+    minimum_accuracy: 0.8, maximum_latency_seconds: 60,
+    training: [], evaluation: [
+      {prompt: 'Evidence: The bid closes on 12 May. Return the closing date only.', answer: '12 May', category: 'extraction'},
+      {prompt: 'Evidence: The tender has no closing date. What is the closing date? Return UNKNOWN if absent.', answer: 'UNKNOWN', category: 'abstention'},
+      {prompt: 'Evidence: Bid A costs 40, Bid B costs 70. Which costs less? Return A or B only.', answer: 'A', category: 'comparison'}
+    ]
+  }, null, 2);
+  panel.append(button('Load synthetic training exercise', () => {
+    const value = JSON.parse(profile.value);
+    value.training_model = 'HuggingFaceTB/SmolLM2-135M-Instruct'; value.training_steps = 10;
+    value.training = [
+      {prompt: 'Evidence: The deadline is 2 March. Return only the date.', answer: '2 March', category: 'extraction'},
+      {prompt: 'Evidence: There is no warranty period. Return the warranty or UNKNOWN.', answer: 'UNKNOWN', category: 'abstention'},
+      {prompt: 'Evidence: Offer P costs 30, offer Q costs 90. Return the cheaper offer letter.', answer: 'P', category: 'comparison'}
+    ];
+    profile.value = JSON.stringify(value, null, 2);
+  }));
+  panel.append(element('h3', '1. Define requirements and review data'), element('p', 'Replace these synthetic starter checks with your use case. Training examples teach behavior; evaluation prompts must be held out. For factual document knowledge, implement RAG rather than treating fine-tuning as a document store.'), field('Local profile and examples (JSON)', profile), button('Save model profile', async () => { await api(`/api/solutions/${name}/models`, {method: 'PUT', body: JSON.parse(profile.value)}); notice('Profile saved. Evaluation and approval are tied to this exact version.'); }));
+  async function action(kind, report_id='') {
+    if (!await confirmation(`Run ${kind}?`, `Run the selected local model step for ${name}. Downloads and training use local disk, memory and CPU. Save and review your profile first. All-mode runs download, baseline evaluation, training setup, fine-tuning, serving and evaluation; you select the measured model afterward.`, `Solution: ${name}\nAction: ${kind}`)) return;
+    const result = await api(`/api/solutions/${name}/models/${kind}`, {method: 'POST', body: {confirmed: true, report_id}});
+    if (result.id) await followJob(result); else { notice(result.message); await openLocalModels(name); }
+  }
+  panel.append(button('Run all lifecycle steps', () => action('all')));
+  panel.append(element('h3', '2. Deploy and measure the baseline'), element('p', 'Start Ollama in Setup first. Download the inference and embedding models, then evaluate exact answers, abstention examples and response time. The embedding call checks that your selected encoder runs.'), button('Download application models', () => action('download')), button('Evaluate local baseline', () => action('evaluate')));
+  panel.append(element('h3', '3. Fine-tuning laboratory'), element('p', 'Install the separate CPU training environment (~several GB), then check its tensor backend. Set training_model to SmolLM2-135M (4 GiB free RAM estimate), SmolLM2-360M (6 GiB), or Qwen3-0.6B (10 GiB) using the exact Hugging Face ID. Set training_steps to 1–100. Default: SmolLM2-135M, 10 steps. Supply at least three short training examples. The lab measures the same model before and after LoRA, exports merged weights, and serves them locally. Domain suitability must pass held-out evaluation.'), button('Install training environment', () => action('install-training')), button('Check training compatibility', () => action('inspect-training')), button('Train LoRA locally', () => action('train')), button('Serve trained model locally', () => action('serve-trained')), button('Evaluate trained model', () => action('evaluate-trained')));
+  if (saved.training) panel.append(element('pre', JSON.stringify(saved.training, null, 2), 'file-view'));
+  panel.append(element('h3', '4. Compare, approve and build'), element('p', 'Approval binds the profile and measured report. Changes to data, thresholds or training invalidate it. Select a passing report, then build or launch your application with that local configuration.'));
+  for (const report of saved.reports) {
+    const card = element('article', undefined, 'card');
+    card.append(element('strong', `${report.model}: ${(report.accuracy * 100).toFixed(1)}% exact-answer accuracy · ${report.maximum_seconds.toFixed(2)}s worst latency`), element('pre', JSON.stringify(report.rows, null, 2), 'file-view'));
+    if (report.passed) card.append(button('Approve this measured model', () => action('approve', report.id)));
+    else card.append(element('p', 'Thresholds not met. Inspect errors and improve data, prompt, model or configuration.'));
+    panel.append(card);
+  }
+  if (saved.approval) panel.append(element('pre', JSON.stringify(saved.approval, null, 2), 'file-view'));
+  panel.scrollIntoView({behavior: 'smooth'});
+}

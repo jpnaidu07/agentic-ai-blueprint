@@ -49,5 +49,5 @@ human_approvals:
 failures:
   - Unavailable model, unknown queue, duplicate submission, or invalid identity.
 deployment: Local containers for development; production requires identity and retention review.
-model_selection: Propose a small cloud model only after measured routing quality and approved data handling; deterministic queue rules take precedence.
+model_selection: Keep the Workbench helper separate from application inference. Select local inference and embedding models from hardware-compatible candidates; deploy, evaluate held-out tasks, fine-tune when justified, compare checkpoints and approve the measured configuration before application use. Never infer training compatibility from inference memory fit.
 open_questions: []

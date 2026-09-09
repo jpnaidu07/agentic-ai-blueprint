@@ -146,6 +146,22 @@ def inspect_system(root):
             "brew": bool(executable("brew")),
         },
         "installed_models": installed,
+        "training_profiles": [
+            {
+                "model": model,
+                "device": "cpu",
+                "required_available_gib_estimate": ram,
+                "fits_current_memory_estimate": available is not None and available >= ram,
+                "sequence_tokens": 256,
+                "method": "LoRA",
+                "acceleration": "CPU implementation; GPU training is not inferred from the GPU name",
+            }
+            for model, ram in [
+                ("HuggingFaceTB/SmolLM2-135M-Instruct", 4),
+                ("HuggingFaceTB/SmolLM2-360M-Instruct", 6),
+                ("Qwen/Qwen3-0.6B", 10),
+            ]
+        ],
         "local_models": [
             {
                 **model,

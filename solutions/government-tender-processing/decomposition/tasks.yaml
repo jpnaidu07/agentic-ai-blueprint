@@ -1,6 +1,6 @@
 schema_version: 1
 solution: government-tender-processing
-design_digest: e77cd0039a178639395b8e672d59c8c2f59ac4c92b15a9883cc38722df80e650
+design_digest: 0747e5bc1fb3a6d49b7e7e649fff1ee9c9eae53c4190e26effbc93c9eebfa7c7
 tasks:
 - id: TASK-CAP-DATA
   parent_capability: CAP-DATA
