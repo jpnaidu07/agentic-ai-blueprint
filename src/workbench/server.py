@@ -285,16 +285,25 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
                     "results": results,
                 }
 
-            return jobs.start("local-model-lifecycle", name, lifecycle)
+            return jobs.start(
+                "local-model-lifecycle",
+                name,
+                lifecycle,
+                request={"model_action": action, "solution": name},
+            )
         if action in {"evaluate", "evaluate-trained"}:
             return jobs.start(
                 "local-model-evaluation",
                 name,
                 lambda job: local_models.evaluate(name, job, action == "evaluate-trained"),
+                request={"model_action": action, "solution": name},
             )
         if action in {"install-training", "inspect-training", "download", "train", "serve-trained"}:
             return jobs.start(
-                "local-model-" + action, name, lambda job: runtime.model_action(name, action)
+                "local-model-" + action,
+                name,
+                lambda job: runtime.model_action(name, action),
+                request={"model_action": action, "solution": name},
             )
         raise HTTPException(404, "Unknown model lifecycle action")
 
@@ -494,9 +503,12 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
     @app.post("/api/actions", dependencies=[Depends(authenticated)])
     def action(body: Action):
         workspace = body.action in {"install-ollama", "start-ollama", "pull-model", "build-runner"}
+        if body.action in {"launch-generated", "stop-app"} and not body.solution:
+            raise WorkbenchError("Select an application before running this action.")
+        target = None if workspace else body.solution or "government-tender-processing"
         return jobs.start(
-            "setup",
-            None if workspace else body.solution,
+            "setup" if workspace else "application",
+            target,
             lambda job: runtime.action(body, lambda message: jobs.event(job, message)),
             request=body.model_dump(),
         )

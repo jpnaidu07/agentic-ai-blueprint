@@ -70,7 +70,7 @@ class Action(Contract):
         "stop-app",
     ]
     model: Literal["qwen3:4b", "qwen3:8b"] = "qwen3:4b"
-    solution: str = Field(default="government-tender-processing", pattern=r"^[a-z][a-z0-9-]{2,63}$")
+    solution: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{2,63}$")
     confirmed: bool = False
 
 

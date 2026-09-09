@@ -90,6 +90,26 @@ def test_new_application_requires_a_passing_local_model(lifecycle):
         runtime.application_model("example-service")
 
 
+def test_approved_baseline_must_still_be_installed_and_running(lifecycle, monkeypatch):
+    instance, profile, _ = lifecycle
+    report = instance.evaluate("example-service", "test-job")
+    instance.approve("example-service", report["id"])
+    monkeypatch.setattr(
+        "src.workbench.system.inspect_system",
+        lambda root: {"tools": {"ollama_ready": False}, "installed_models": []},
+    )
+    with pytest.raises(WorkbenchError, match="Start Ollama"):
+        instance.approved("example-service")
+    monkeypatch.setattr(
+        "src.workbench.system.inspect_system",
+        lambda root: {
+            "tools": {"ollama_ready": True},
+            "installed_models": [profile.inference_model, profile.embedding_model],
+        },
+    )
+    assert instance.approved("example-service")["model"] == profile.inference_model
+
+
 def test_gateway_uses_only_selected_local_model_and_bounded_config(monkeypatch):
     from fastapi.testclient import TestClient
 

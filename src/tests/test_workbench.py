@@ -490,6 +490,25 @@ def test_model_cannot_write_host_paths_or_skip_confirmation(workbench):
     assert denied["state"] == "blocked"
 
 
+def test_setup_actions_are_workspace_scoped_and_rerunnable(workbench):
+    client, _, _ = workbench
+    pair(client)
+    runtime = client.app.state.runtime
+    runtime.action = lambda body, event: {"message": "setup complete"}
+    first = finish_job(
+        client,
+        client.post("/api/actions", json={"action": "start-ollama", "confirmed": True}),
+    )
+    assert first["state"] == "succeeded"
+    assert first["solution"] is None
+    assert first["request"]["action"] == "start-ollama"
+    second = finish_job(
+        client,
+        client.post("/api/actions", json={"action": "start-ollama", "confirmed": True}),
+    )
+    assert second["state"] == "succeeded"
+
+
 def test_editor_optimistic_concurrency_and_stale_approval(workbench):
     client, root, _ = workbench
     pair(client)

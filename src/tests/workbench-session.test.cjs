@@ -41,7 +41,7 @@ async function boot(store, {expired = false, offline = false} = {}) {
     fetch: async (url, options) => {
       calls.push({url, options});
       if (offline) throw new Error('Offline');
-      if (expired && url === '/api/session') return {ok: false, status: 401, json: async () => ({detail: 'Pair again'})};
+      if (expired && url === '/api/session') return {ok: false, status: 401, text: async () => JSON.stringify({detail: 'Pair again'})};
       const payloads = {
         '/api/session': {connected: true, provider: 'gemini', model: 'test-gemini', csrf: 'server-csrf'},
         '/api/solutions': [{name: 'example-solution', title: 'Example', tasks: 0, completed: 0}],
@@ -49,14 +49,15 @@ async function boot(store, {expired = false, offline = false} = {}) {
         '/api/catalog': {items: [], modules: []},
         '/api/jobs': [],
         '/api/jobs/run-1': {id: 'run-1', kind: 'advice', state: 'succeeded', events: [], result: {}},
+        '/api/system': {os: 'Windows', cpu: 'test CPU', logical_cpus: 8, architecture: 'AMD64', ram_gb: 32, available_ram_gb: 16, gpu: 'test GPU', disk_free_gb: 100, tools: {docker: true, docker_ready: true, runner_ready: false, ollama: true, ollama_ready: true}, installed_models: [], local_models: [{id: 'qwen3:4b', download_gb: 2.5, working_gb: 6, purpose: 'Local test model', fits_estimate: true, available_now_estimate: true}]},
       };
       if (!(url in payloads)) throw new Error('Unexpected request: ' + url);
-      return {ok: true, status: 200, json: async () => payloads[url]};
+      return {ok: true, status: 200, text: async () => JSON.stringify(payloads[url])};
     },
     setTimeout: () => 1, clearTimeout() {}, console, URL,
   });
   await vm.runInContext(source, context);
-  const ui = vm.runInContext('({state, unlock, show, selectSolution, syncConnection, rememberSession, lock})', context);
+  const ui = vm.runInContext('({state, unlock, show, selectSolution, syncConnection, rememberSession, lock, setupState})', context);
   return {ui, $, calls};
 }
 
@@ -133,4 +134,14 @@ test('unavailable or malformed tab storage falls back to pairing', async () => {
   const corrupt = storage();
   corrupt.setItem(key, '{not json');
   assert.equal((await boot(corrupt)).calls.length, 0);
+});
+
+test('detected prerequisite state replaces installation actions with current readiness', async () => {
+  const page = await boot(storage());
+  page.ui.setupState({tools: {ollama: true, ollama_ready: true, docker: true, docker_ready: true, runner_ready: true}, installed_models: ['qwen3:4b']});
+  assert.equal(page.$('ollama-state').textContent, 'Running');
+  assert.equal(page.$('install-ollama').hidden, true);
+  assert.equal(page.$('start-ollama').hidden, true);
+  assert.equal(page.$('docker-state').textContent, 'Ready');
+  assert.equal(page.$('build-runner').hidden, true);
 });

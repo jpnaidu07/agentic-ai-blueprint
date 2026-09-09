@@ -140,19 +140,23 @@ class Runtime:
                 raise WorkbenchError(
                     "Free at least 4 GiB RAM and 5 GiB disk before downloading models."
                 )
+            binary = executable("ollama")
+            if not binary or not machine["tools"]["ollama_ready"]:
+                raise WorkbenchError("Install and start Ollama in Setup before downloading models.")
+            outputs = []
             for model in (profile.inference_model, profile.embedding_model):
-                # Pulls are explicitly user-selected IDs, never helper-generated shell commands.
-                response = httpx.post(
-                    "http://127.0.0.1:11434/api/pull",
-                    json={"model": model, "stream": False},
-                    timeout=600,
-                    trust_env=False,
-                )
-                response.raise_for_status()
-                if response.json().get("status") != "success":
-                    raise WorkbenchError("Model download did not complete.")
+                result = self._bounded_command([binary, "pull", model], 1800)
+                outputs.append(result.get("output", ""))
+                if result["exit_code"]:
+                    return {
+                        **result,
+                        "outcome": "needs-attention",
+                        "message": f"Downloading {model} failed. Review the live command output and retry.",
+                    }
             return {
-                "message": "Downloaded the application's inference and embedding models. Run baseline evaluation next."
+                "exit_code": 0,
+                "output": "\n".join(outputs)[-24000:],
+                "message": "Downloaded the application's inference and embedding models. Run baseline evaluation next.",
             }
         directory = local_path(self.state, f"local-models/{solution}")
         directory.mkdir(parents=True, exist_ok=True)
@@ -360,11 +364,13 @@ class Runtime:
 
         def drain():
             nonlocal offset
-            with output_path.open("rb") as stream:
-                stream.seek(offset)
-                chunk = stream.read(8000)
-                offset += len(chunk)
-            if chunk:
+            while True:
+                with output_path.open("rb") as stream:
+                    stream.seek(offset)
+                    chunk = stream.read(8000)
+                    offset += len(chunk)
+                if not chunk:
+                    return
                 report(chunk.decode("utf-8", errors="replace").replace("\r", "\n"))
 
         try:
@@ -406,6 +412,7 @@ class Runtime:
                 f"Command exited with code {process.returncode} after {int(time.monotonic() - started)} seconds."
             )
             with output_path.open("rb") as data:
+                data.seek(max(0, output_path.stat().st_size - 24000))
                 text = data.read(24000).decode("utf-8", errors="replace")
             return {"exit_code": process.returncode, "output": text}
         finally:
@@ -486,11 +493,16 @@ class Runtime:
                     **result,
                     "message": "Ollama installation failed. Review command output, resolve the error and retry.",
                 }
+            installed = executable("ollama")
             return {
                 **result,
-                "message": "Installer finished. Refresh hardware detection; if needed restart the workbench so PATH updates are visible.",
+                "message": "Ollama installation completed. Start the runtime next."
+                if installed
+                else "The installer exited successfully, but Ollama was not found in known install locations. Restart Windows or install from the official download, then detect again.",
             }
         if body.action == "start-ollama":
+            if inspect_system(self.root)["tools"]["ollama_ready"]:
+                return {"message": "Ollama is already running on loopback."}
             binary = executable("ollama")
             if not binary:
                 raise WorkbenchError("Install Ollama first, then verify `ollama --version`.")
@@ -517,29 +529,28 @@ class Runtime:
                 raise WorkbenchError(
                     "The selected model exceeds the conservative RAM/disk budget. Choose a smaller model or use cloud inference."
                 )
-            try:
-                response = httpx.post(
-                    "http://127.0.0.1:11434/api/pull",
-                    json={"model": body.model, "stream": False},
-                    timeout=600,
-                    trust_env=False,
-                )
-                if response.status_code != 200 or response.json().get("status") != "success":
-                    raise WorkbenchError(
-                        "Model download did not finish. Check Ollama and disk space, then retry."
-                    )
-            except httpx.HTTPError:
-                raise WorkbenchError(
-                    "Ollama is unavailable or the download timed out. Start it and retry the model download."
-                ) from None
+            binary = executable("ollama")
+            if not binary or not machine["tools"]["ollama_ready"]:
+                raise WorkbenchError("Install and start Ollama before downloading a model.")
+            result = self._bounded_command([binary, "pull", body.model], 1800)
+            if result["exit_code"]:
+                return {
+                    **result,
+                    "message": f"Downloading {body.model} failed. Review the live output and retry.",
+                }
             return {
-                "message": f"Downloaded {body.model}; select it in Model connection and run the probe. Hardware fit does not prove task quality."
+                **result,
+                "message": f"Downloaded {body.model}; select it in Model connection and run the probe. Hardware fit does not prove task quality.",
             }
         if body.action == "launch-tender":
             return self.launch_tender()
         if body.action == "launch-generated":
+            if not body.solution:
+                raise WorkbenchError("Select a generated solution before launch.")
             return self.launch_generated(body.solution)
         if body.action == "stop-app":
+            if not body.solution:
+                raise WorkbenchError("Select an application before stopping it.")
             self.stop(body.solution)
             return {
                 "message": "Stopped the app managed by this workbench; no unrelated processes were touched."

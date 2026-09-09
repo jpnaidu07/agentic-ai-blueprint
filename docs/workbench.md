@@ -145,6 +145,12 @@ steps. The app never pipes a downloaded script into a shell. Starting the runtim
 and downloading an allowlisted model are separate confirmed actions. Docker/WSL2,
 drivers, OS dialogs or reboots can require manual steps.
 
+Setup cards use the latest environment detection to distinguish absent, installed
+and running runtimes and hide completed installation actions. Long local commands
+stream bounded output and elapsed-time heartbeats into Run history. Stop run ends
+the managed process tree; nonzero exits and timeouts are recorded as failures and
+can be retried from the run record.
+
 Verified documentation references (2026-08-30):
 
 - [OpenAI model listing](https://developers.openai.com/api/reference/resources/models/methods/list)

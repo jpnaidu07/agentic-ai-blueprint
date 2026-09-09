@@ -1,7 +1,7 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
-const state = {csrf: '', sessionToken: '', connected: false, provider: '', model: '', initialLocalModel: '', solutions: [], selected: null, detail: null, catalog: [], activeRun: null, view: 'home', timer: null};
+const state = {csrf: '', sessionToken: '', connected: false, provider: '', model: '', initialLocalModel: '', environment: null, solutions: [], selected: null, detail: null, catalog: [], activeRun: null, view: 'home', timer: null};
 const labels = {home: 'Overview', setup: 'Setup & models', solutions: 'Solutions', library: 'Specs & skills', runs: 'Run history', apps: 'Applications'};
 const sessionKey = 'blueprint.workbench.session.v1';
 // Tab- and origin-scoped: never persist provider keys, pairing tokens or role tokens.
@@ -118,6 +118,7 @@ async function show(view) {
   document.title = `${labels[view]} · Blueprint Workbench`;
   if (view !== 'apps') { $('role-tokens').replaceChildren(); $('role-tokens').hidden = true; }
   if (!state.csrf) return;
+  if (view === 'setup' && !state.environment) await detectEnvironment(false);
   if (view === 'solutions') await loadSolutions();
   if (view === 'runs') await loadRuns();
   if (view === 'apps') await loadApps();
@@ -171,9 +172,21 @@ click('disconnect-model', async () => {
   $('connection-result').hidden = true;
   notice('Model disconnected. In-flight calls release their keys when they finish.');
 });
-click('scan-system', async () => {
+function setupState(data) {
+  state.environment = data;
+  const ollama = data.tools.ollama_ready ? ['Running', 'green', `Ollama is running on loopback. ${data.installed_models.length} model${data.installed_models.length === 1 ? '' : 's'} installed.`] : data.tools.ollama ? ['Installed', 'warn', 'Ollama is installed but its local API is not responding. Start the runtime.'] : ['Not installed', 'warn', 'Install Ollama before downloading or evaluating local application models.'];
+  $('ollama-state').textContent = ollama[0]; $('ollama-state').className = `pill ${ollama[1]}`; $('ollama-description').textContent = ollama[2];
+  $('install-ollama').hidden = data.tools.ollama; $('start-ollama').hidden = data.tools.ollama_ready; $('start-ollama').disabled = !data.tools.ollama;
+  const docker = data.tools.docker_ready ? ['Ready', 'green', 'Docker daemon is running. Generated-code isolation is available.'] : data.tools.docker ? ['Daemon stopped', 'warn', 'Docker is installed, but the daemon is unavailable. Start Docker Desktop and detect again.'] : ['Not installed', 'warn', 'Install and start Docker before testing or launching generated solutions.'];
+  $('docker-state').textContent = docker[0]; $('docker-state').className = `pill ${docker[1]}`; $('docker-description').textContent = docker[2];
+  $('runner-state').textContent = data.tools.runner_ready ? 'Ready' : 'Not built'; $('runner-state').className = `pill ${data.tools.runner_ready ? 'green' : 'warn'}`;
+  $('runner-description').textContent = data.tools.runner_ready ? 'The isolated runner image is ready for generated-code tests.' : data.tools.docker_ready ? 'Docker is ready. Build the pinned runner image once.' : 'Start the Docker daemon before building the runner.';
+  $('build-runner').hidden = data.tools.runner_ready; $('build-runner').disabled = !data.tools.docker_ready;
+}
+async function detectEnvironment(includeHelper = true) {
   notice('Checking CPU, memory, local runtimes and Docker readiness…');
   let data = await api('/api/system');
+  setupState(data);
   const stats = [['PROCESSOR', data.cpu, `${data.logical_cpus || '?'} logical CPUs · ${data.architecture}`], ['SYSTEM MEMORY', data.ram_gb ? `${data.ram_gb} GiB` : 'Unknown', `${data.available_ram_gb ?? '?'} GiB currently available`], ['GRAPHICS', data.gpu, 'Acceleration must be tested'], ['LOCAL TOOLS', data.tools.docker_ready ? 'Docker ready' : 'Docker needs setup', `Ollama: ${data.tools.ollama_ready ? 'running' : data.tools.ollama ? 'installed' : 'not found'} · ${data.disk_free_gb} GiB free`]];
   $('hardware').replaceChildren(...stats.map(([label, value, note]) => {
     const card = element('div'); card.append(element('span', label), element('strong', value), element('small', note)); return card;
@@ -181,7 +194,7 @@ click('scan-system', async () => {
   const baseline = new Map(data.local_models.map(model => [model.id, model]));
   let recommendations = null;
   let recommendationError = null;
-  if (state.connected) {
+  if (includeHelper && state.connected) {
     notice(`Hardware detected. Asking ${state.provider} / ${state.model} to rank candidates${state.selected ? ` for ${state.selected}` : ' for this workspace'}…`);
     try {
       recommendations = await api('/api/system/recommendations', {method: 'POST', body: {solution: state.selected}});
@@ -203,18 +216,26 @@ click('scan-system', async () => {
     head.append(element('h2', model.id), element('span', label, `pill ${(model.fits_estimate || model.recommendation === 'recommended') ? 'green' : 'warn'}`));
     if (recommendations) card.append(head, element('p', model.best_for), element('p', model.rationale), element('small', `Validate: ${model.validation}`));
     else card.append(head, element('p', model.purpose), element('p', `Download ≈ ${model.download_gb} GB · runtime budget ≈ ${model.working_gb} GiB, plus OS/services. ${model.available_now_estimate ? 'Current free memory meets the conservative estimate.' : 'Close other workloads or check available memory before running.'}`));
-    const installed = data.installed_models.includes(model.id);
+    const installed = data.installed_models.some(name => name === model.id || name.startsWith(`${model.id}:`));
     if (installed) card.append(button('Select installed model', () => {
       $('provider').value = 'ollama'; $('provider').dispatchEvent(new Event('change')); $('model').value = model.id; $('connection-form').scrollIntoView({behavior: 'smooth'});
     }));
-    else if (baseline.has(model.id)) card.append(button('Review model download…', () => systemAction('pull-model', model.id)));
+    else if (baseline.has(model.id)) {
+      const download = button(data.tools.ollama_ready ? 'Download model…' : 'Start Ollama to download', () => systemAction('pull-model', model.id));
+      download.disabled = !data.tools.ollama_ready; card.append(download);
+    }
     if (model.source) { const source = element('a', 'Model card & current download details ↗'); source.href = model.source; source.target = '_blank'; source.rel = 'noopener noreferrer'; card.append(source); }
     return card;
   }));
   if (recommendationError) notice(`Helper recommendation unavailable: ${recommendationError.message} Showing the offline hardware shortlist instead.`, true);
   else if (recommendations) notice(`${recommendations.summary} Initial application candidate: ${state.initialLocalModel}. It becomes verified only after its solution evaluation passes.`);
-  else notice(`Detected ${data.os}. Initial minimum viable candidate: ${state.initialLocalModel}. This is a capacity estimate; install and evaluate it before approval.`);
-});
+  else {
+    const next = data.tools.ollama_ready ? 'download and evaluate it' : data.tools.ollama ? 'start Ollama, then download and evaluate it' : 'install Ollama, then download and evaluate it';
+    notice(`Detected ${data.os}. Initial minimum viable candidate: ${state.initialLocalModel}. This is a capacity estimate; ${next} before approval.`);
+  }
+  return data;
+}
+click('scan-system', () => detectEnvironment(true));
 
 async function loadCatalog() {
   const data = await api('/api/catalog');
@@ -354,6 +375,7 @@ async function watch(id) {
     if (state.activeRun === id) renderRun(job);
     if (job.state === 'running') { state.timer = setTimeout(() => watch(id), 1500); return; }
     await Promise.all([loadRuns(),loadSolutions()]);
+    if (job.kind === 'setup' && !job.solution) await detectEnvironment(false);
     notice(job.state === 'succeeded' ? 'Operation finished. Review its results and remaining task gates.' : (job.result.message || `Operation ${job.state}.`),job.state !== 'succeeded');
     if (job.kind === 'advice' && job.result.answer) { $('advice-answer').textContent=[job.result.answer,...job.result.next_steps.map(step=>`• ${step}`),...job.result.limitations.map(step=>`Limit: ${step}`)].join('\n\n'); $('advice-answer').hidden=false; }
     if (job.result.url && state.view === 'runs') await show('apps');
@@ -383,6 +405,7 @@ function renderRun(job) {
     if(job.solution)view.append(button('Back to solution',async()=>{await show('solutions');await selectSolution(job.solution);},'secondary small'));
     else view.append(button('Back to Setup & models',()=>show('setup'),'secondary small'));
     if(job.request?.action)view.append(button('Run again',()=>systemAction(job.request.action,job.request.model,job.request.solution),'secondary small'));
+    if(job.request?.model_action)view.append(button('Run again',()=>runModelAction(job.request.solution,job.request.model_action),'secondary small'));
   }
 }
 
@@ -392,7 +415,7 @@ async function confirmation(title, description, command) {
   return new Promise(resolve=>dialog.addEventListener('close',()=>resolve(dialog.returnValue==='default' && $('action-confirmed').checked),{once:true}));
 }
 $('action-confirmed').addEventListener('change',()=>{$('action-proceed').disabled=!$('action-confirmed').checked;});
-async function systemAction(action, model='qwen3:4b', solution='government-tender-processing') {
+async function systemAction(action, model='qwen3:4b', solution=null) {
   const details={
     'install-ollama':['Install Ollama?', 'The fixed installer uses Winget or Homebrew when present. It downloads software and accepts package/source terms. You may need to complete OS prompts manually.','winget install --id Ollama.Ollama --exact …\nmacOS alternative: brew install ollama'],
     'start-ollama':['Start local Ollama?', 'Starts the installed Ollama binary bound to 127.0.0.1:11434. An already running server is reused.','ollama serve (loopback only)'],
@@ -409,7 +432,12 @@ async function systemAction(action, model='qwen3:4b', solution='government-tende
 document.querySelectorAll('[data-system-action]').forEach(control=>control.addEventListener('click',()=>perform(control,()=>systemAction(control.dataset.systemAction))));
 click('launch-tender',()=>systemAction('launch-tender'));
 async function loadApps(){
-  const apps=await api('/api/apps');
+  const [apps,tender]=await Promise.all([api('/api/apps'),api('/api/solutions/government-tender-processing/models')]);
+  const baselineReady=tender.approval?.provider==='ollama' && tender.readiness.inference_model_installed;
+  const tenderReady=Boolean(tender.approval && tender.environment.tools.ollama_ready && tender.readiness.embedding_model_installed && (baselineReady || tender.readiness.trained_server_running));
+  $('launch-tender').disabled=!tenderReady;
+  $('launch-tender').textContent=tenderReady?'Launch tender portal →':'Complete local model lifecycle first';
+  $('launch-tender').title=tenderReady?'':'Approve a passing model, keep its inference runtime running, and install the embedding model.';
   $('app-list').replaceChildren(...apps.map(app=>{
     const card=element('article',undefined,'card');card.append(element('span',app.running?'RUNNING LOCALLY':'STOPPED','eyebrow'),element('h2',app.solution));
     const url=new URL(app.url);
@@ -448,11 +476,20 @@ async function restoreSession() {
 }
 restoreSession();
 
+async function runModelAction(name, kind, report_id='') {
+  if (!await confirmation(`Run ${kind}?`, `Run the selected local model step for ${name}. Downloads and training use local disk, memory and CPU. Save and review your profile first. All-mode runs download, baseline evaluation, training setup, fine-tuning, serving and evaluation; you select the measured model afterward.`, `Solution: ${name}\nAction: ${kind}`)) return;
+  const result = await api(`/api/solutions/${name}/models/${kind}`, {method: 'POST', body: {confirmed: true, report_id}});
+  if (result.id) await followJob(result); else { notice(result.message); await openLocalModels(name); }
+}
+
 async function openLocalModels(name) {
   let panel = $('local-lifecycle');
   if (!panel) { panel = element('section', undefined, 'card'); panel.id = 'local-lifecycle'; $('solution-detail').append(panel); }
   const saved = await api(`/api/solutions/${name}/models`);
   panel.replaceChildren(element('h2', 'Your application’s local models'), element('p', 'The Workbench helper teaches and builds. These separate models run your application on this computer. Complete the steps in order, review measured results, then approve the application configuration.'));
+  const ready = saved.readiness;
+  const runtimeStatus = saved.environment.tools.ollama_ready ? `Ollama running · ${saved.environment.installed_models.length} models installed` : saved.environment.tools.ollama ? 'Ollama installed · start it in Setup' : 'Ollama not installed · complete Setup first';
+  panel.append(element('p', `${runtimeStatus} · Training environment ${ready.training_environment_installed ? 'installed' : 'not installed'} · Trained server ${ready.trained_server_running ? 'running' : 'stopped'}`, saved.environment.tools.ollama_ready ? 'callout' : 'notice error'));
   const profile = element('textarea'); profile.rows = 18;
   profile.value = JSON.stringify(saved.profile || {
     inference_model: state.initialLocalModel || 'qwen3:4b', embedding_model: 'embeddinggemma', context_window: 4096, max_tokens: 128,
@@ -474,15 +511,14 @@ async function openLocalModels(name) {
     ];
     profile.value = JSON.stringify(value, null, 2);
   }));
-  panel.append(element('h3', '1. Define requirements and review data'), element('p', 'Replace these synthetic starter checks with your use case. Training examples teach behavior; evaluation prompts must be held out. For factual document knowledge, implement RAG rather than treating fine-tuning as a document store.'), field('Local profile and examples (JSON)', profile), button('Save model profile', async () => { await api(`/api/solutions/${name}/models`, {method: 'PUT', body: JSON.parse(profile.value)}); notice('Profile saved. Evaluation and approval are tied to this exact version.'); }));
+  panel.append(element('h3', '1. Define requirements and review data'), element('p', 'Replace these synthetic starter checks with your use case. Training examples teach behavior; evaluation prompts must be held out. For factual document knowledge, implement RAG rather than treating fine-tuning as a document store.'), field('Local profile and examples (JSON)', profile), button('Save model profile', async () => { await api(`/api/solutions/${name}/models`, {method: 'PUT', body: JSON.parse(profile.value)}); notice('Profile saved. Evaluation and approval are tied to this exact version.'); await openLocalModels(name); }));
   async function action(kind, report_id='') {
-    if (!await confirmation(`Run ${kind}?`, `Run the selected local model step for ${name}. Downloads and training use local disk, memory and CPU. Save and review your profile first. All-mode runs download, baseline evaluation, training setup, fine-tuning, serving and evaluation; you select the measured model afterward.`, `Solution: ${name}\nAction: ${kind}`)) return;
-    const result = await api(`/api/solutions/${name}/models/${kind}`, {method: 'POST', body: {confirmed: true, report_id}});
-    if (result.id) await followJob(result); else { notice(result.message); await openLocalModels(name); }
+    return runModelAction(name, kind, report_id);
   }
-  panel.append(button('Run all lifecycle steps', () => action('all')));
-  panel.append(element('h3', '2. Deploy and measure the baseline'), element('p', 'Start Ollama in Setup first. Download the inference and embedding models, then evaluate exact answers, abstention examples and response time. The embedding call checks that your selected encoder runs.'), button('Download application models', () => action('download')), button('Evaluate local baseline', () => action('evaluate')));
-  panel.append(element('h3', '3. Fine-tuning laboratory'), element('p', 'Install the separate CPU training environment (~several GB), then check its tensor backend. Set training_model to SmolLM2-135M (4 GiB free RAM estimate), SmolLM2-360M (6 GiB), or Qwen3-0.6B (10 GiB) using the exact Hugging Face ID. Set training_steps to 1–100. Default: SmolLM2-135M, 10 steps. Supply at least three short training examples. The lab measures the same model before and after LoRA, exports merged weights, and serves them locally. Domain suitability must pass held-out evaluation.'), button('Install training environment', () => action('install-training')), button('Check training compatibility', () => action('inspect-training')), button('Train LoRA locally', () => action('train')), button('Serve trained model locally', () => action('serve-trained')), button('Evaluate trained model', () => action('evaluate-trained')));
+  function stepButton(label, kind, enabled, reason) { const control = button(label, () => action(kind)); control.disabled = !enabled; if (!enabled) control.title = reason; return control; }
+  panel.append(stepButton('Run all lifecycle steps', 'all', Boolean(saved.profile && saved.environment.tools.ollama_ready), 'Save a profile and start Ollama first.'));
+  panel.append(element('h3', '2. Deploy and measure the baseline'), element('p', 'Start Ollama in Setup first. Download the inference and embedding models, then evaluate exact answers, abstention examples and response time. The embedding call checks that your selected encoder runs.'), stepButton('Download application models', 'download', Boolean(saved.profile && saved.environment.tools.ollama_ready), 'Save a profile and start Ollama first.'), stepButton('Evaluate local baseline', 'evaluate', Boolean(ready.inference_model_installed && ready.embedding_model_installed && saved.environment.tools.ollama_ready), 'Download both application models first.'));
+  panel.append(element('h3', '3. Fine-tuning laboratory'), element('p', 'Install the separate CPU training environment (~several GB), then check its tensor backend. Set training_model to SmolLM2-135M (4 GiB free RAM estimate), SmolLM2-360M (6 GiB), or Qwen3-0.6B (10 GiB) using the exact Hugging Face ID. Set training_steps to 1–100. Default: SmolLM2-135M, 10 steps. Supply at least three short training examples. The lab measures the same model before and after LoRA, exports merged weights, and serves them locally. Domain suitability must pass held-out evaluation.'), stepButton('Install training environment', 'install-training', Boolean(saved.profile), 'Save a profile first.'), stepButton('Check training compatibility', 'inspect-training', ready.training_environment_installed, 'Install the training environment first.'), stepButton('Train LoRA locally', 'train', Boolean(ready.training_environment_installed && saved.profile?.training?.length >= 3), 'Install the training environment and save at least three training examples.'), stepButton('Serve trained model locally', 'serve-trained', ready.training_complete, 'Complete training first.'), stepButton('Evaluate trained model', 'evaluate-trained', Boolean(ready.trained_server_running && ready.embedding_model_installed), 'Start the trained server and install the embedding model first.'));
   if (saved.training) panel.append(element('pre', JSON.stringify(saved.training, null, 2), 'file-view'));
   panel.append(element('h3', '4. Compare, approve and build'), element('p', 'Approval binds the profile and measured report. Changes to data, thresholds or training invalidate it. Select a passing report, then build or launch your application with that local configuration.'));
   for (const report of saved.reports) {

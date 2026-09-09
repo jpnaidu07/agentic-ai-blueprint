@@ -31,9 +31,12 @@ LOCAL_MODELS = [
 def executable(name):
     found = shutil.which(name)
     if not found and name == "ollama" and os.name == "nt":
-        candidate = Path(os.getenv("LOCALAPPDATA", "")) / "Programs/Ollama/ollama.exe"
-        if candidate.is_file():
-            found = str(candidate)
+        candidates = [
+            Path(os.getenv("LOCALAPPDATA", "")) / "Programs/Ollama/ollama.exe",
+            Path(os.getenv("LOCALAPPDATA", "")) / "Ollama/ollama.exe",
+            Path(os.getenv("ProgramFiles", "")) / "Ollama/ollama.exe",
+        ]
+        found = next((str(candidate) for candidate in candidates if candidate.is_file()), None)
     return found
 
 
@@ -107,11 +110,18 @@ def inspect_system(root):
         except (OSError, ValueError, subprocess.TimeoutExpired):
             pass
     docker, ollama = executable("docker"), executable("ollama")
-    docker_ready = False
+    docker_ready, runner_ready = False, False
     if docker:
         try:
             docker_ready = (
                 command([docker, "info", "--format", "{{.ServerVersion}}"], timeout=5).returncode
+                == 0
+            )
+            runner_ready = (
+                docker_ready
+                and command(
+                    [docker, "image", "inspect", "agent-blueprint-runner:local"], timeout=8
+                ).returncode
                 == 0
             )
         except (OSError, subprocess.TimeoutExpired):
@@ -140,6 +150,7 @@ def inspect_system(root):
             "git": bool(executable("git")),
             "docker": bool(docker),
             "docker_ready": docker_ready,
+            "runner_ready": runner_ready,
             "ollama": bool(ollama),
             "ollama_ready": ollama_ready,
             "winget": bool(executable("winget")),

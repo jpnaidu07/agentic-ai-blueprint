@@ -89,12 +89,22 @@ class LocalModels:
         return path
 
     def status(self, name):
+        from src.workbench.system import inspect_system
+
         directory = self.directory(name)
         profile_path = local_path(specs.safe_solution(self.root, name), "models/profile.json")
+        profile = read_profile(self.root, name) if profile_path.exists() else None
+        environment = inspect_system(self.root)
+        installed = environment["installed_models"]
+
+        def installed_model(model):
+            return bool(model) and any(
+                name == model or name.startswith(f"{model}:") for name in installed
+            )
+
+        managed = getattr(self.runtime, "apps", {}).get(f"model-{name}")
         return {
-            "profile": read_profile(self.root, name).model_dump()
-            if profile_path.exists()
-            else None,
+            "profile": profile.model_dump() if profile else None,
             "reports": [
                 json.loads(p.read_text()) for p in sorted(directory.glob("evaluation-*.json"))
             ],
@@ -102,6 +112,21 @@ class LocalModels:
             if (directory / "training.json").exists()
             else None,
             "approval": self.approved(name, required=False),
+            "environment": environment,
+            "readiness": {
+                "inference_model_installed": installed_model(
+                    profile.inference_model if profile else None
+                ),
+                "embedding_model_installed": installed_model(
+                    profile.embedding_model if profile else None
+                ),
+                "training_environment_installed": bool(
+                    hasattr(self.runtime, "training_python")
+                    and self.runtime.training_python().exists()
+                ),
+                "training_complete": (directory / "training.json").exists(),
+                "trained_server_running": bool(managed and self.runtime.running(managed)),
+            },
         }
 
     def evaluate(self, name, job, trained=False):
@@ -120,8 +145,12 @@ class LocalModels:
         )
         rows = []
         with httpx.Client(timeout=120, trust_env=False) as client:
-            for example in profile.evaluation:
+            for number, example in enumerate(profile.evaluation, 1):
                 self.jobs.check_cancelled()
+                self.jobs.event(
+                    job,
+                    f"Evaluation case {number}/{len(profile.evaluation)} · {example.category}",
+                )
                 messages = [
                     {
                         "role": "system",
@@ -161,6 +190,7 @@ class LocalModels:
                     }
                 )
             # A genuine embedding call verifies the configured model, never simulated vectors.
+            self.jobs.event(job, f"Checking embedding model: {profile.embedding_model}")
             embedded = client.post(
                 "http://127.0.0.1:11434/api/embed",
                 json={"model": profile.embedding_model, "input": [profile.evaluation[0].prompt]},
@@ -226,7 +256,7 @@ class LocalModels:
         )
         return {
             "message": "Approved the measured local model configuration for this solution.",
-            "configuration": self.approved(name),
+            "configuration": self.approved(name, required=False),
         }
 
     def approved(self, name, required=True):
@@ -257,6 +287,27 @@ class LocalModels:
                 if required:
                     raise
                 base_url = None
+        if required:
+            from src.workbench.system import inspect_system
+
+            machine = inspect_system(self.root)
+            if not machine["tools"]["ollama_ready"]:
+                raise WorkbenchError(
+                    "Start Ollama before using the approved application model and embeddings."
+                )
+            installed = machine["installed_models"]
+
+            def has_model(model):
+                return any(value == model or value.startswith(f"{model}:") for value in installed)
+
+            if not result["trained"] and not has_model(result["model"]):
+                raise WorkbenchError(
+                    "The approved application model is not installed in Ollama. Download it again or approve an installed model."
+                )
+            if not has_model(profile.embedding_model):
+                raise WorkbenchError(
+                    "The approved embedding model is not installed in Ollama. Download it again before launch."
+                )
         return {
             "provider": "openai-compatible" if result["trained"] else "ollama",
             "model": result["model"],
