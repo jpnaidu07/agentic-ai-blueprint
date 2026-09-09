@@ -64,6 +64,22 @@ class ModelFixture:
     def handle(self, request):
         self.calls.append(request)
         if request.method == "GET":
+            if request.url.path == "/v1beta/models":
+                return httpx.Response(
+                    200,
+                    json={
+                        "models": [
+                            {
+                                "name": "models/test-model",
+                                "supportedGenerationMethods": ["generateContent"],
+                            },
+                            {
+                                "name": "models/test-embedding",
+                                "supportedGenerationMethods": ["embedContent"],
+                            },
+                        ]
+                    },
+                )
             return httpx.Response(200, json={"data": [{"id": "test-model"}]})
         payload = json.loads(request.content)
         properties = payload["response_format"]["json_schema"]["schema"]["properties"]
@@ -399,6 +415,11 @@ def test_alternate_workbench_provider_probe_and_model_listing(workbench, provide
     )
     assert response.status_code == 200, response.text
     assert response.json()["models"] == ["test-model"]
+    if provider == "gemini":
+        listing = model.calls[-1]
+        assert listing.url.path == "/v1beta/models"
+        assert listing.headers["x-goog-api-key"] == FAKE_KEY
+        assert "authorization" not in listing.headers
     response = client.post(
         "/api/connection",
         json={

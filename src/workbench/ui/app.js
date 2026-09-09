@@ -1,7 +1,7 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
-const state = {csrf: '', sessionToken: '', connected: false, provider: '', model: '', solutions: [], selected: null, detail: null, catalog: [], activeRun: null, view: 'home', timer: null};
+const state = {csrf: '', sessionToken: '', connected: false, provider: '', model: '', initialLocalModel: '', solutions: [], selected: null, detail: null, catalog: [], activeRun: null, view: 'home', timer: null};
 const labels = {home: 'Overview', setup: 'Setup & models', solutions: 'Solutions', library: 'Specs & skills', runs: 'Run history', apps: 'Applications'};
 const sessionKey = 'blueprint.workbench.session.v1';
 // Tab- and origin-scoped: never persist provider keys, pairing tokens or role tokens.
@@ -11,7 +11,7 @@ function readSession() {
 function rememberSession() {
   if (!state.sessionToken) return;
   try {
-    sessionStorage.setItem(sessionKey, JSON.stringify({token: state.sessionToken, view: state.view, selected: state.selected, activeRun: state.activeRun, configuration: {max_tokens: Number($('max-tokens').value), context_window: Number($('context-window').value)}}));
+    sessionStorage.setItem(sessionKey, JSON.stringify({token: state.sessionToken, view: state.view, selected: state.selected, activeRun: state.activeRun, initialLocalModel: state.initialLocalModel, configuration: {max_tokens: Number($('max-tokens').value), context_window: Number($('context-window').value)}}));
   } catch { notice('Browser storage is unavailable. This session works, but refresh will require pairing again.', true); }
 }
 
@@ -186,10 +186,17 @@ click('scan-system', async () => {
     } catch (error) { recommendationError = error; }
   }
   const models = recommendations ? recommendations.candidates.map(candidate => ({...baseline.get(candidate.model), id: candidate.model, ...candidate})) : data.local_models;
+  const initial = recommendations
+    ? recommendations.candidates.find(candidate => candidate.recommendation === 'recommended')?.model
+    : data.local_models.find(model => model.fits_estimate)?.id;
+  state.initialLocalModel = initial || '';
+  rememberSession();
   $('local-models').replaceChildren(...models.map(model => {
     const card = element('article', undefined, 'card');
     const head = element('div', undefined, 'section-head');
-    const label = recommendations ? `${model.recommendation} · ${model.deployment}` : (model.fits_estimate ? 'Fits memory estimate' : 'Outside safe estimate');
+    const label = model.id === state.initialLocalModel
+      ? `${recommendations ? 'helper selected' : 'minimum viable candidate'} · validation required`
+      : recommendations ? `${model.recommendation} · ${model.deployment}` : (model.fits_estimate ? 'Fits memory estimate' : 'Outside safe estimate');
     head.append(element('h2', model.id), element('span', label, `pill ${(model.fits_estimate || model.recommendation === 'recommended') ? 'green' : 'warn'}`));
     if (recommendations) card.append(head, element('p', model.best_for), element('p', model.rationale), element('small', `Validate: ${model.validation}`));
     else card.append(head, element('p', model.purpose), element('p', `Download ≈ ${model.download_gb} GB · runtime budget ≈ ${model.working_gb} GiB, plus OS/services. ${model.available_now_estimate ? 'Current free memory meets the conservative estimate.' : 'Close other workloads or check available memory before running.'}`));
@@ -202,8 +209,8 @@ click('scan-system', async () => {
     return card;
   }));
   if (recommendationError) notice(`Helper recommendation unavailable: ${recommendationError.message} Showing the offline hardware shortlist instead.`, true);
-  else if (recommendations) notice(`${recommendations.summary} No use-case benchmark has run; review each validation step.`);
-  else notice(`Detected ${data.os}. Showing the offline hardware shortlist; connect a helper for solution-aware ranking. Hardware fit is an estimate.`);
+  else if (recommendations) notice(`${recommendations.summary} Initial application candidate: ${state.initialLocalModel}. It becomes verified only after its solution evaluation passes.`);
+  else notice(`Detected ${data.os}. Initial minimum viable candidate: ${state.initialLocalModel}. This is a capacity estimate; install and evaluate it before approval.`);
 });
 
 async function loadCatalog() {
@@ -418,6 +425,7 @@ async function restoreSession() {
   state.sessionToken = saved.token;
   try {
     const info = await api('/api/session');
+    state.initialLocalModel = saved.initialLocalModel || '';
     await unlock({...saved.configuration, ...info});
   } catch (error) {
     // Keep a valid tab session on temporary network failures; only 401/log out clears it.
@@ -442,7 +450,7 @@ async function openLocalModels(name) {
   panel.replaceChildren(element('h2', 'Your application’s local models'), element('p', 'The Workbench helper teaches and builds. These separate models run your application on this computer. Complete the steps in order, review measured results, then approve the application configuration.'));
   const profile = element('textarea'); profile.rows = 18;
   profile.value = JSON.stringify(saved.profile || {
-    inference_model: 'qwen3:4b', embedding_model: 'embeddinggemma', context_window: 4096, max_tokens: 128,
+    inference_model: state.initialLocalModel || 'qwen3:4b', embedding_model: 'embeddinggemma', context_window: 4096, max_tokens: 128,
     minimum_accuracy: 0.8, maximum_latency_seconds: 60,
     training: [], evaluation: [
       {prompt: 'Evidence: The bid closes on 12 May. Return the closing date only.', answer: '12 May', category: 'extraction'},
@@ -450,6 +458,7 @@ async function openLocalModels(name) {
       {prompt: 'Evidence: Bid A costs 40, Bid B costs 70. Which costs less? Return A or B only.', answer: 'A', category: 'comparison'}
     ]
   }, null, 2);
+  if (!saved.profile) panel.append(element('p', `Initial inference candidate: ${state.initialLocalModel || 'qwen3:4b'} (${state.initialLocalModel ? 'selected during environment detection' : 'offline minimum default'}). Save the profile, then run an actual evaluation before treating it as supported.`, 'callout'));
   panel.append(button('Load synthetic training exercise', () => {
     const value = JSON.parse(profile.value);
     value.training_model = 'HuggingFaceTB/SmolLM2-135M-Instruct'; value.training_steps = 10;

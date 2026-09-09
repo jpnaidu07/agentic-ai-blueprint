@@ -109,16 +109,34 @@ class Providers:
             with httpx.Client(
                 timeout=15, transport=self.transport, trust_env=False, follow_redirects=False
             ) as client:
-                response = client.get(
-                    PROVIDERS[provider]["base_url"] + "/models",
-                    headers={"Authorization": f"Bearer {key}"},
-                )
+                if provider == "gemini":
+                    response = client.get(
+                        "https://generativelanguage.googleapis.com/v1beta/models",
+                        headers={"x-goog-api-key": key},
+                    )
+                else:
+                    response = client.get(
+                        PROVIDERS[provider]["base_url"] + "/models",
+                        headers={"Authorization": f"Bearer {key}"},
+                    )
                 if response.status_code != 200:
                     raise WorkbenchError(
                         f"Model listing failed (HTTP {response.status_code}); check the provider account and key."
                     )
-                values = response.json()["data"]
-            names = sorted({row["id"] for row in values if isinstance(row.get("id"), str)})
+                payload = response.json()
+                if provider == "gemini":
+                    values = payload["models"]
+                    names = sorted(
+                        {
+                            row["name"].removeprefix("models/")
+                            for row in values
+                            if isinstance(row.get("name"), str)
+                            and "generateContent" in row.get("supportedGenerationMethods", [])
+                        }
+                    )
+                else:
+                    values = payload["data"]
+                    names = sorted({row["id"] for row in values if isinstance(row.get("id"), str)})
             return {
                 "models": names[:300],
                 "note": "Availability is account-specific; select a text model and run the structured-output connection test.",
