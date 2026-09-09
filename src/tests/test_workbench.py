@@ -411,6 +411,12 @@ def test_alternate_workbench_provider_probe_and_model_listing(workbench, provide
     assert response.status_code == 200, response.text
     assert all(request.url.host == host for request in model.calls)
 
+    # The browser clears key inputs after connection. A later list/refresh reuses
+    # only the matching provider credential retained in this server-side session.
+    response = client.post("/api/providers/models", json={"provider": provider, "api_key": ""})
+    assert response.status_code == 200, response.text
+    assert response.json()["models"] == ["test-model"]
+
 
 def test_model_cannot_write_host_paths_or_skip_confirmation(workbench):
     client, root, model = workbench

@@ -299,7 +299,10 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
 
     @app.post("/api/providers/models")
     def provider_models(body: ModelList, session=Depends(authenticated)):
-        return providers.models(body.provider, body.api_key.get_secret_value())
+        key = body.api_key.get_secret_value()
+        if not key and session.connection and session.connection.provider == body.provider:
+            key = session.connection.api_key.get_secret_value()
+        return providers.models(body.provider, key)
 
     @app.post("/api/connection")
     def connect(body: Connection, session=Depends(authenticated)):
