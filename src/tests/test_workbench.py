@@ -60,6 +60,7 @@ class ModelFixture:
         self.calls = []
         self.unsafe_path = None
         self.incomplete_lesson = False
+        self.invalid_recommendations = 0
 
     def handle(self, request):
         self.calls.append(request)
@@ -120,6 +121,15 @@ class ModelFixture:
                 "summary": "A small synthetic implementation used solely to verify orchestration mechanics.",
             }
         elif "candidates" in properties:
+            if self.invalid_recommendations:
+                self.invalid_recommendations -= 1
+                return httpx.Response(
+                    200,
+                    json={
+                        "model": "test-model",
+                        "choices": [{"finish_reason": "stop", "message": {"content": "not JSON"}}],
+                    },
+                )
             output = {
                 "summary": "Use the connected helper for demanding work and validate the smaller local candidate on representative tasks.",
                 "candidates": [
@@ -323,6 +333,18 @@ def test_connected_helper_ranks_hardware_candidates_for_selected_solution(workbe
     assert "specifications" in supplied
     assert supplied["hardware_and_local_tools"]["local_models"]
     assert FAKE_KEY not in model.calls[-1].content.decode()
+
+
+def test_helper_recommendation_retries_one_invalid_structured_response(workbench):
+    client, _, model = workbench
+    pair(client)
+    connect(client)
+    model.invalid_recommendations = 1
+    calls_before = len(model.calls)
+    response = client.post("/api/system/recommendations", json={"solution": None})
+    assert response.status_code == 200, response.text
+    assert response.json()["candidates"][0]["model"] == "qwen3:8b"
+    assert len(model.calls) == calls_before + 2
 
 
 def test_keys_are_not_echoed_stored_or_reused_without_consent(workbench):

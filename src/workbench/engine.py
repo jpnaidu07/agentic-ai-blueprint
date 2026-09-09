@@ -8,6 +8,7 @@ from pathlib import Path
 
 import yaml
 
+from src.agent.llm_client import LLMError
 from src.blueprint import learning, specs, workflow
 from src.blueprint.models import Decomposition, Design, UseCase
 from src.workbench.contracts import Advice, Implementation, ModelRecommendations
@@ -265,13 +266,30 @@ class Engine:
             "decision_scope": "Local application inference only. The helper builds the solution and is not an application model candidate.",
         }
         if solution:
-            data["specifications"] = self.artifacts(specs.safe_solution(self.root, solution))
-        recommendation, usage = self.providers.generate(
-            connection,
-            ModelRecommendations,
-            "Recommend local application inference models for the supplied solution and machine. Name only local_models or installed_models IDs, all deployment local. The Workbench helper is separate. Treat fits_estimate only as capacity screening. Installed models without catalog estimates must remain conditional. Explain inference vs training memory and prescribe a representative task evaluation. If specs are absent, say the recommendation is workspace-level and conditional.",
-            data,
-        )
+            path = specs.safe_solution(self.root, solution)
+            data["specifications"] = {
+                relative: specs.read_yaml(path / relative)
+                for relative in (
+                    "use-case.yaml",
+                    "capability/capability.yaml",
+                    "design/architecture.yaml",
+                )
+                if (path / relative).is_file()
+            }
+        instructions = "Recommend local application inference models for the supplied solution and machine. Name only local_models or installed_models IDs, all deployment local. The Workbench helper is separate. Treat fits_estimate only as capacity screening. Installed models without catalog estimates must remain conditional. Explain inference vs training memory and prescribe a representative task evaluation. If specs are absent, say the recommendation is workspace-level and conditional."
+        last_error = None
+        for _ in range(2):
+            try:
+                recommendation, usage = self.providers.generate(
+                    connection, ModelRecommendations, instructions, data
+                )
+                break
+            except LLMError as exc:
+                last_error = exc
+        else:
+            raise WorkbenchError(
+                f"The helper could not return a valid structured recommendation after two attempts: {last_error}"
+            ) from None
         local = {entry["id"] for entry in machine["local_models"]} | set(
             machine["installed_models"]
         )

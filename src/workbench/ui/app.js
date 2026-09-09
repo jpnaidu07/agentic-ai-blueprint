@@ -51,7 +51,10 @@ async function api(path, options = {}) {
   let body = options.body;
   if (body !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(body); }
   const response = await fetch(path, {...options, body, headers, credentials: 'omit'});
-  const data = await response.json();
+  const text = await response.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; }
+  catch { data = {detail: `Workbench returned HTTP ${response.status} without a JSON error. Restart with the latest code and inspect the server terminal.`}; }
   if (!response.ok) {
     if (response.status === 401 && !(path === '/api/session' && options.method === 'POST')) lock();
     throw new Error(typeof data.detail === 'string' ? data.detail : 'Request failed. Check required fields.');
