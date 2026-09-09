@@ -23,6 +23,8 @@ class Jobs:
                 "CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, kind TEXT, solution TEXT, state TEXT, created TEXT, events TEXT, result TEXT)"
             )
             conn.execute("UPDATE jobs SET state='interrupted' WHERE state='running'")
+            if "request" not in {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}:
+                conn.execute("ALTER TABLE jobs ADD COLUMN request TEXT DEFAULT '{}'")
 
     @contextmanager
     def db(self):
@@ -42,6 +44,7 @@ class Jobs:
         value = dict(row)
         value["events"] = json.loads(value["events"])
         value["result"] = json.loads(value["result"])
+        value["request"] = json.loads(value["request"] or "{}")
         return value
 
     def list(self):
@@ -71,7 +74,7 @@ class Jobs:
                 "Run cancelled. Finished artifacts remain; inspect status before resuming."
             )
 
-    def start(self, kind, solution, function):
+    def start(self, kind, solution, function, request=None):
         with self.lock:
             if self.active:
                 raise WorkbenchError(
@@ -82,7 +85,7 @@ class Jobs:
             self.cancelled.clear()
             with self.db() as conn:
                 conn.execute(
-                    "INSERT INTO jobs VALUES (?,?,?,?,?,?,?)",
+                    "INSERT INTO jobs (id,kind,solution,state,created,events,result,request) VALUES (?,?,?,?,?,?,?,?)",
                     (
                         job_id,
                         kind,
@@ -91,6 +94,7 @@ class Jobs:
                         datetime.now(timezone.utc).isoformat(),
                         "[]",
                         "{}",
+                        json.dumps(request or {}),
                     ),
                 )
 
@@ -102,6 +106,8 @@ class Jobs:
                 no_secrets(json.dumps(result))
                 if result.get("outcome") == "needs-attention":
                     state = "needs-attention"
+                if result.get("exit_code", 0) != 0:
+                    state = "failed"
             except (WorkbenchError, LLMError) as exc:
                 state, result = (
                     "cancelled" if self.cancelled.is_set() else "blocked",

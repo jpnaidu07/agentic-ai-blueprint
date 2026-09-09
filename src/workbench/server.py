@@ -75,6 +75,7 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
     sessions = Sessions(token or secrets.token_urlsafe(32))
     jobs = Jobs(state)
     runtime = runtime_factory(root, state)
+    runtime.jobs = jobs
     providers = providers or Providers()
     engine = Engine(root, state, providers, jobs, runtime)
     local_models = LocalModels(root, state, runtime, jobs)
@@ -482,19 +483,22 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
 
     @app.post("/api/jobs/{job_id}/cancel", dependencies=[Depends(authenticated)])
     def cancel(job_id: str):
-        if jobs.active != job_id:
-            raise WorkbenchError("That job is not running.")
-        jobs.cancelled.set()
+        with jobs.lock:
+            if jobs.active != job_id:
+                raise WorkbenchError("That job is not running.")
+            jobs.cancelled.set()
         return {
-            "message": "Cancellation requested. The current bounded provider/process operation must finish before the next safe boundary."
+            "message": "Stop requested. Managed commands will be terminated; provider calls stop at their next safe boundary."
         }
 
     @app.post("/api/actions", dependencies=[Depends(authenticated)])
     def action(body: Action):
+        workspace = body.action in {"install-ollama", "start-ollama", "pull-model", "build-runner"}
         return jobs.start(
             "setup",
-            body.solution,
+            None if workspace else body.solution,
             lambda job: runtime.action(body, lambda message: jobs.event(job, message)),
+            request=body.model_dump(),
         )
 
     @app.get("/api/apps", dependencies=[Depends(authenticated)])

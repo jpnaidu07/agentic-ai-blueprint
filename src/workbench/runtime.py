@@ -3,7 +3,9 @@
 import hashlib
 import json
 import os
+import re
 import secrets
+import signal
 import socket
 import subprocess
 import sys
@@ -14,7 +16,7 @@ from pathlib import Path
 import httpx
 
 from src.blueprint import specs
-from src.workbench.security import WorkbenchError, local_path, no_secrets
+from src.workbench.security import SECRET, WorkbenchError, local_path, no_secrets
 from src.workbench.system import command, executable, inspect_system
 
 IMAGE = "agent-blueprint-runner:local"
@@ -344,7 +346,29 @@ class Runtime:
         # Spool to a bounded temporary file rather than accumulate untrusted output in RAM.
         output_path = self.state / f"output-{uuid.uuid4().hex}.txt"
         process = None
+        jobs = getattr(self, "jobs", None)
+        job = jobs.active if jobs else None
+
+        def report(message):
+            if job:
+                clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", message)
+                jobs.event(job, SECRET.sub("[redacted]", clean))
+
+        started = time.monotonic()
+        last_update = started
+        offset = 0
+
+        def drain():
+            nonlocal offset
+            with output_path.open("rb") as stream:
+                stream.seek(offset)
+                chunk = stream.read(8000)
+                offset += len(chunk)
+            if chunk:
+                report(chunk.decode("utf-8", errors="replace").replace("\r", "\n"))
+
         try:
+            report("Running command: " + subprocess.list2cmdline(args))
             with output_path.open("wb") as output:
                 process = subprocess.Popen(
                     args,
@@ -352,23 +376,57 @@ class Runtime:
                     stderr=subprocess.STDOUT,
                     stdin=subprocess.DEVNULL,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                    start_new_session=os.name != "nt",
                 )
                 deadline = time.monotonic() + timeout
                 while process.poll() is None:
-                    if time.monotonic() > deadline or output_path.stat().st_size > 1000000:
-                        process.kill()
-                        process.wait(timeout=10)
-                        raise WorkbenchError(
-                            "Command exceeded its time/output budget. Inspect the task and retry with a smaller scope."
+                    if jobs and jobs.cancelled.is_set():
+                        self._stop_command(process)
+                        report(
+                            "Command stopped by user. Inspect partial installation before retrying."
                         )
+                        jobs.check_cancelled()
+                    if time.monotonic() > deadline or output_path.stat().st_size > 1000000:
+                        self._stop_command(process)
+                        drain()
+                        return {
+                            "exit_code": -1,
+                            "message": "Command exceeded its time/output budget and was stopped. Review logs and retry.",
+                        }
+                    if time.monotonic() - last_update >= 1:
+                        drain()
+                    if time.monotonic() - last_update >= 10:
+                        report(
+                            f"Command running · {int(time.monotonic() - started)} seconds elapsed. Waiting for installer output or completion."
+                        )
+                        last_update = time.monotonic()
                     time.sleep(0.2)
+            drain()
+            report(
+                f"Command exited with code {process.returncode} after {int(time.monotonic() - started)} seconds."
+            )
             with output_path.open("rb") as data:
                 text = data.read(24000).decode("utf-8", errors="replace")
             return {"exit_code": process.returncode, "output": text}
         finally:
             if process and process.poll() is None:
-                process.kill()
+                self._stop_command(process)
             output_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _stop_command(process):
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                capture_output=True,
+                timeout=10,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        else:
+            os.killpg(process.pid, signal.SIGKILL)
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=10)
 
     def action(self, body, event):
         if not body.confirmed:
@@ -391,9 +449,10 @@ class Runtime:
                 600,
             )
             if result["exit_code"]:
-                raise WorkbenchError(
-                    "Runner build failed. Check Docker/network availability and run the documented build command; no generated code ran on the host."
-                )
+                return {
+                    **result,
+                    "message": "Runner build failed. Review the command output and retry after resolving the error.",
+                }
             return {
                 "message": "Isolated Python runner is ready. Runtime tests have no network access."
             }
@@ -423,11 +482,13 @@ class Runtime:
                 )
             result = self._bounded_command(args, 600)
             if result["exit_code"]:
-                raise WorkbenchError(
-                    "The Ollama installer needs manual attention. Use https://ollama.com/download, reopen the terminal and verify `ollama --version`."
-                )
+                return {
+                    **result,
+                    "message": "Ollama installation failed. Review command output, resolve the error and retry.",
+                }
             return {
-                "message": "Installer finished. Refresh hardware detection; if needed restart the workbench so PATH updates are visible."
+                **result,
+                "message": "Installer finished. Refresh hardware detection; if needed restart the workbench so PATH updates are visible.",
             }
         if body.action == "start-ollama":
             binary = executable("ollama")

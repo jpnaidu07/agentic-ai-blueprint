@@ -363,7 +363,7 @@ async function loadRuns() {
   const runs = await api('/api/jobs');
   $('run-list').replaceChildren(...runs.map(job => {
     const control=button('',async()=>{state.activeRun=job.id;rememberSession();renderRun(await api(`/api/jobs/${job.id}`));if(job.state==='running')await watch(job.id);},`run-choice${state.activeRun===job.id?' active':''}`);
-    control.append(element('strong',`${job.kind} · ${job.state}`),element('small',`${job.solution || 'Workspace advice'}\n${new Date(job.created).toLocaleString()}`));return control;
+    control.append(element('strong',`${job.request?.action || job.kind} · ${job.state}`),element('small',`${job.solution || 'Workspace setup'}\n${new Date(job.created).toLocaleString()}`));return control;
   }));
   if (!runs.length) $('run-list').append(element('p','No runs yet. Connect a model and create a solution, or launch the reference app.','subtle'));
 }
@@ -372,7 +372,7 @@ function renderRun(job) {
   const view=$('run-detail');view.replaceChildren();
   const heading=element('div',undefined,'section-head');heading.append(element('h2',`${job.kind} / ${job.solution || 'workspace'}`),element('span',job.state,`pill ${job.state==='succeeded'?'green':job.state==='running'?'':'warn'}`));view.append(heading);
   view.append(element('p',`Run ${job.id.slice(0,8)} · ${new Date(job.created).toLocaleString()}`,'subtle'));
-  if(job.state==='running')view.append(button('Cancel at next safe boundary',async()=>{const result=await api(`/api/jobs/${job.id}/cancel`,{method:'POST'});notice(result.message);},'quiet small'));
+  if(job.state==='running')view.append(element('p',`${Math.max(0,Math.floor((Date.now()-Date.parse(job.created))/1000))} seconds elapsed · progress refreshes automatically`),button('Stop run',async()=>{const result=await api(`/api/jobs/${job.id}/cancel`,{method:'POST'});notice(result.message);},'quiet small'));
   for(const event of job.events){const row=element('div',undefined,`event ${event.level==='warning'?'warning':''}`);row.append(element('small',new Date(event.at).toLocaleTimeString()),element('div',event.message));view.append(row);}
   if(!job.events.length && job.state==='running')view.append(element('p','Operation queued; progress will appear here.','subtle'));
   if(job.state!=='running'){
@@ -381,6 +381,8 @@ function renderRun(job) {
     if(job.result.answer)result.append(element('p',job.result.answer,'prose'));
     result.append(element('pre',JSON.stringify(job.result,null,2),'file-view'));view.append(result);
     if(job.solution)view.append(button('Back to solution',async()=>{await show('solutions');await selectSolution(job.solution);},'secondary small'));
+    else view.append(button('Back to Setup & models',()=>show('setup'),'secondary small'));
+    if(job.request?.action)view.append(button('Run again',()=>systemAction(job.request.action,job.request.model,job.request.solution),'secondary small'));
   }
 }
 
