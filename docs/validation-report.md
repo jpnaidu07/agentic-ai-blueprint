@@ -117,7 +117,7 @@ payload limits, absent source mounts and blocked generated-app egress.
 ## Initial reference validation
 
 - Ruff lint passed; Ruff formatting check passed.
-- Pytest: **122 passed, 2 Docker-only tests skipped locally**. One warning originates in FastAPI's TestClient compatibility import.
+- Pytest: **128 passed, 2 Docker-only tests skipped locally**. One warning originates in FastAPI's TestClient compatibility import.
 - Offline evaluation: **10/10** synthetic retrieval/scoring cases passed. No live model quality or cloud cost was measured.
 - `pip-audit` found no known vulnerabilities in pinned runtime dependencies at scan time.
 - JavaScript syntax and **7 browser-session tests** passed. PowerShell syntax checks passed.

@@ -92,6 +92,11 @@ def store(request: Request) -> Store:
     return request.app.state.tender_store
 
 
+def require_tender(conn, tender_id):
+    if conn.execute(select(tenders.c.id).where(tenders.c.id == tender_id)).first() is None:
+        raise HTTPException(404, "Tender not found")
+
+
 def bid_record(conn, tender_id, bid_id):
     record = (
         conn.execute(select(bids).where(bids.c.id == bid_id, bids.c.tender_id == tender_id))
@@ -575,6 +580,7 @@ def search(
 ):
     principal.authorize(tender_id)
     with db.engine.connect() as conn:
+        require_tender(conn, tender_id)
         query = select(documents.c.id, documents.c.bid_id, documents.c.payload).where(
             documents.c.tender_id == tender_id
         )
@@ -592,27 +598,28 @@ def search(
                 409,
                 "Search scope is too large for the reference runtime. Select a bidder or use a production vector index.",
             )
-        embedder = configured_embedder()
-        degraded = False
-        warning = None
-        if embedder and len(records) > MAX_QUERY_TIME_EMBEDDING_CHUNKS:
-            embedder = None
-            degraded = True
-            warning = (
-                "Semantic retrieval was skipped because this query-time reference exceeds its 256-chunk embedding budget. "
-                "Select a bidder or deploy the production persistent vector index; bounded lexical retrieval was used."
-            )
-        try:
-            results = retrieve(q, records, embedder=embedder)
-        except (httpx.HTTPError, ValueError, KeyError, TypeError):
-            if not embedder:
-                raise
-            degraded = True
-            warning = (
-                "Local embedding retrieval failed; lexical evidence search was used. "
-                "Check Ollama and re-run before relying on semantic recall."
-            )
-            results = retrieve(q, records)
+    # Release the relational connection before potentially slow inference work.
+    embedder = configured_embedder()
+    degraded = False
+    warning = None
+    if embedder and len(records) > MAX_QUERY_TIME_EMBEDDING_CHUNKS:
+        embedder = None
+        degraded = True
+        warning = (
+            "Semantic retrieval was skipped because this query-time reference exceeds its 256-chunk embedding budget. "
+            "Select a bidder or deploy the production persistent vector index; bounded lexical retrieval was used."
+        )
+    try:
+        results = retrieve(q, records, embedder=embedder)
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        if not embedder:
+            raise
+        degraded = True
+        warning = (
+            "Local embedding retrieval failed; lexical evidence search was used. "
+            "Check Ollama and re-run before relying on semantic recall."
+        )
+        results = retrieve(q, records)
     return {
         "matches": results,
         "status": "EVIDENCE_FOUND" if results else "INSUFFICIENT_EVIDENCE",
@@ -730,6 +737,7 @@ def audit_trail(
 ):
     principal.authorize(tender_id)
     with db.engine.connect() as conn:
+        require_tender(conn, tender_id)
         rows = [
             dict(r)
             for r in conn.execute(

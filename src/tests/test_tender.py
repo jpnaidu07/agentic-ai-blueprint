@@ -242,6 +242,11 @@ def test_search_and_model_transfer_gate(client, policy):
     )
 
 
+@pytest.mark.parametrize("suffix", ["search?q=experience", "audit"])
+def test_search_and_audit_require_existing_tender(client, suffix):
+    assert client.get(f"/api/tenders/NONEXISTENT/{suffix}").status_code == 404
+
+
 def test_search_uses_local_embeddings_and_degrades_safely(client, policy, monkeypatch):
     seed_bid(client, policy)
     monkeypatch.setenv("ALLOW_DOCUMENT_LLM", "true")

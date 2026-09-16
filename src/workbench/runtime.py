@@ -69,6 +69,12 @@ class Runtime:
             raise WorkbenchError("Start the trained local model server for this solution first.")
         return managed["url"]
 
+    def check_startup_cancelled(self, solution):
+        jobs = getattr(self, "jobs", None)
+        if jobs and jobs.cancelled.is_set():
+            self.stop(solution)
+            jobs.check_cancelled()
+
     def application_model(self, solution):
         return self.local_models.approved(solution)
 
@@ -229,6 +235,7 @@ class Runtime:
             url = f"http://127.0.0.1:{port}"
             self.apps[f"model-{solution}"] = {"process": process, "kind": "process", "url": url}
             for _ in range(60):
+                self.check_startup_cancelled(f"model-{solution}")
                 if process.poll() is not None:
                     break
                 try:
@@ -535,6 +542,7 @@ class Runtime:
             self.apps["ollama"] = {"process": process, "kind": "process"}
             event("Started the Ollama process; waiting for its loopback health endpoint.")
             for _ in range(40):
+                self.check_startup_cancelled("ollama")
                 if process.poll() is not None:
                     break
                 try:
@@ -682,6 +690,7 @@ class Runtime:
         }
         try:
             for _ in range(50):
+                self.check_startup_cancelled("government-tender-processing")
                 if process.poll() is not None:
                     break
                 try:
@@ -861,6 +870,7 @@ class Runtime:
                 "Preview container failed to start. Inspect the runtime contract and Docker availability."
             )
         for _ in range(40):
+            self.check_startup_cancelled(solution)
             try:
                 response = httpx.get(
                     f"http://127.0.0.1:{port}/api/health", timeout=1, trust_env=False

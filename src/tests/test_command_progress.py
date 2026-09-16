@@ -1,10 +1,14 @@
 """Real subprocess lifecycle checks without running system installers."""
 
+import subprocess
 import sys
 import time
 
+import pytest
+
 from src.workbench.jobs import Jobs
 from src.workbench.runtime import Runtime
+from src.workbench.security import WorkbenchError
 
 
 def wait_done(jobs, job):
@@ -65,3 +69,24 @@ def test_nonzero_and_timeout_are_failures(tmp_path):
         result = wait_done(jobs, job)
         assert result["state"] == "failed"
         assert result["result"]["exit_code"] != 0
+
+
+@pytest.mark.parametrize(
+    "solution", ["ollama", "model-example", "government-tender-processing", "generated-example"]
+)
+def test_cancelled_startup_stops_managed_process(tmp_path, solution):
+    runtime = Runtime(tmp_path, tmp_path)
+    runtime.jobs = Jobs(tmp_path)
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    runtime.apps[solution] = {"kind": "process", "process": process}
+    try:
+        runtime.jobs.cancelled.set()
+        with pytest.raises(WorkbenchError, match="cancelled"):
+            runtime.check_startup_cancelled(solution)
+        assert process.poll() is not None
+        assert solution not in runtime.apps
+    finally:
+        runtime.close()
