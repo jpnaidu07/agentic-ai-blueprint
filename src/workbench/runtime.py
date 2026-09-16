@@ -69,6 +69,12 @@ class Runtime:
             raise WorkbenchError("Start the trained local model server for this solution first.")
         return managed["url"]
 
+    def check_startup_cancelled(self, solution):
+        jobs = getattr(self, "jobs", None)
+        if jobs and jobs.cancelled.is_set():
+            self.stop(solution)
+            jobs.check_cancelled()
+
     def application_model(self, solution):
         return self.local_models.approved(solution)
 
@@ -229,6 +235,7 @@ class Runtime:
             url = f"http://127.0.0.1:{port}"
             self.apps[f"model-{solution}"] = {"process": process, "kind": "process", "url": url}
             for _ in range(60):
+                self.check_startup_cancelled(f"model-{solution}")
                 if process.poll() is not None:
                     break
                 try:
@@ -423,17 +430,28 @@ class Runtime:
     @staticmethod
     def _stop_command(process):
         if os.name == "nt":
-            subprocess.run(
-                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                capture_output=True,
-                timeout=10,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
+            try:
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    capture_output=True,
+                    timeout=10,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                pass
         else:
-            os.killpg(process.pid, signal.SIGKILL)
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         if process.poll() is None:
             process.kill()
-        process.wait(timeout=10)
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired as exc:
+            raise WorkbenchError(
+                "The managed command could not be stopped; close it from the operating system before retrying."
+            ) from exc
 
     def action(self, body, event):
         if not body.confirmed:
@@ -510,18 +528,42 @@ class Runtime:
                 return {
                     "message": "An Ollama server is already available on localhost:11434; it was not modified."
                 }
-            process = subprocess.Popen(
-                [binary, "serve"],
-                env={**os.environ, "OLLAMA_HOST": "127.0.0.1:11434"},
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                stdin=subprocess.DEVNULL,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
+            log_path = self.state / "ollama-server.log"
+            log_path.write_text("", encoding="utf-8")
+            with log_path.open("ab") as server_log:
+                process = subprocess.Popen(
+                    [binary, "serve"],
+                    env={**os.environ, "OLLAMA_HOST": "127.0.0.1:11434"},
+                    stdout=server_log,
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
             self.apps["ollama"] = {"process": process, "kind": "process"}
-            return {
-                "message": "Started Ollama on loopback. Refresh setup to verify readiness; this workbench will stop the server it started on shutdown."
-            }
+            event("Started the Ollama process; waiting for its loopback health endpoint.")
+            for _ in range(40):
+                self.check_startup_cancelled("ollama")
+                if process.poll() is not None:
+                    break
+                try:
+                    response = httpx.get(
+                        "http://127.0.0.1:11434/api/tags", timeout=1, trust_env=False
+                    )
+                    if response.status_code == 200:
+                        event("Ollama is ready on http://127.0.0.1:11434.")
+                        return {
+                            "message": "Ollama is running on loopback and passed its readiness check."
+                        }
+                except httpx.HTTPError:
+                    pass
+                time.sleep(0.25)
+            self.stop("ollama")
+            tail = log_path.read_text(encoding="utf-8", errors="replace")[-8000:]
+            if tail:
+                event("Ollama startup output:\n" + tail)
+            raise WorkbenchError(
+                "Ollama did not become ready within 10 seconds. Review the startup output, check port 11434, and retry."
+            )
         if body.action == "pull-model":
             machine = inspect_system(self.root)
             model = next(m for m in machine["local_models"] if m["id"] == body.model)
@@ -616,6 +658,9 @@ class Runtime:
                 "LLM_MAX_TOKENS": str(config["max_tokens"]),
                 "LLM_STRUCTURED_OUTPUT": "true",
                 "LLM_EMBEDDING_MODEL": config["embedding_model"],
+                "LLM_EMBEDDING_BASE_URL": config.get(
+                    "embedding_base_url", "http://127.0.0.1:11434"
+                ),
             }
         )
         process = subprocess.Popen(
@@ -645,6 +690,7 @@ class Runtime:
         }
         try:
             for _ in range(50):
+                self.check_startup_cancelled("government-tender-processing")
                 if process.poll() is not None:
                     break
                 try:
@@ -824,6 +870,7 @@ class Runtime:
                 "Preview container failed to start. Inspect the runtime contract and Docker availability."
             )
         for _ in range(40):
+            self.check_startup_cancelled(solution)
             try:
                 response = httpx.get(
                     f"http://127.0.0.1:{port}/api/health", timeout=1, trust_env=False
@@ -872,6 +919,7 @@ class Runtime:
                     gateway.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     gateway.kill()
+                    gateway.wait(timeout=5)
         if app and app["kind"] == "process":
             process = app["process"]
             if process.poll() is None:
@@ -880,6 +928,7 @@ class Runtime:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     process.kill()
+                    process.wait(timeout=5)
         elif app:
             if app.get("proxy_name"):
                 command(

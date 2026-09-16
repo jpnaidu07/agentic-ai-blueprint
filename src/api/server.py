@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -75,6 +76,18 @@ def create_app(database_url=None, scanner=None):
     ui_dir = Path(__file__).resolve().parents[1] / "tender" / "ui"
     if ui_dir.is_dir():
         app.mount("/static", StaticFiles(directory=ui_dir), name="static")
+
+    @app.exception_handler(Exception)
+    async def unexpected_error(request: Request, exc: Exception):
+        error_id = secrets.token_hex(6)
+        logger.error("Unhandled tender API error id=%s type=%s", error_id, type(exc).__name__)
+        return JSONResponse(
+            {
+                "detail": "The tender service encountered an unexpected internal error. "
+                f"Reference {error_id} and review the local service log."
+            },
+            500,
+        )
 
     @app.middleware("http")
     async def request_metadata(request: Request, call_next):

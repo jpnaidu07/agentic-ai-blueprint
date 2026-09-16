@@ -6,7 +6,7 @@ Retrieval-augmented generation selects external knowledge at query time and puts
 
 For a tender example, "What warranty exclusions does bidder A list?" requires authorized passages from that bidder's current documents. "How many bids are approved?" requires SQL over approval records. "Approve bidder A" requires a separately authorized business action. RAG supports the first need and must not become the authority for the other two. Adapt these examples to the selected solution.
 
-The existing tender reference returns cited excerpts for free-text fallback. That is a retrieval baseline, not evidence that a complete generative RAG pipeline already runs.
+The tender reference returns cited excerpts using lexical search and, when its approved local embedding model is ready, bounded query-time hybrid retrieval. Embedding failure is visible and falls back to lexical search. This is still a retrieval baseline: it has no persistent vector-index lifecycle or generated-answer stage, so it is not evidence that a complete production RAG pipeline runs.
 
 ## Compare with "relearning"
 

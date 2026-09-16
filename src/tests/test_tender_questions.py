@@ -40,6 +40,8 @@ def test_questions_enforce_scope_and_never_execute_document_instructions(client,
     doc, _ = seed_bid(client, policy)
     result = ask(client, "Experience years").json()
     assert result["citations"][0]["document_id"] == doc
+    assert result["retrieval_mode"] == "bm25"
+    assert result["retrieval_degraded"] is False
     assert ask(client, "xyz-not-in-evidence").json()["citations"] == []
     accept_all(client, doc)
     client.post("/api/tenders/TND-001/evaluate", json={"idempotency_key": "question-evaluation-2"})

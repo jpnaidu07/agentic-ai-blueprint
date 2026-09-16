@@ -4,11 +4,13 @@ import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
 
+import httpx
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+from src.tender.api import embedding_vectors
 from src.tender.documents import MAX_BYTES, parse_pdf, retrieve
 from src.tender.models import TenderInput, score_bids
 from src.tender.security import authenticate
@@ -238,6 +240,70 @@ def test_search_and_model_transfer_gate(client, policy):
         ).status_code
         == 503
     )
+
+
+@pytest.mark.parametrize("suffix", ["search?q=experience", "audit"])
+def test_search_and_audit_require_existing_tender(client, suffix):
+    assert client.get(f"/api/tenders/NONEXISTENT/{suffix}").status_code == 404
+
+
+def test_search_uses_local_embeddings_and_degrades_safely(client, policy, monkeypatch):
+    seed_bid(client, policy)
+    monkeypatch.setenv("ALLOW_DOCUMENT_LLM", "true")
+    monkeypatch.setenv("LLM_EMBEDDING_MODEL", "synthetic-embedding")
+    monkeypatch.setenv("LLM_EMBEDDING_BASE_URL", "http://127.0.0.1:11434")
+    monkeypatch.setattr(
+        "src.tender.api.embedding_vectors", lambda texts: [[1.0, 0.0] for _ in texts]
+    )
+    result = client.get("/api/tenders/TND-001/search?q=experience").json()
+    assert result["retrieval_mode"] == "hybrid"
+    assert result["matches"][0]["retrieval_method"] == "hybrid-rrf"
+
+    def unavailable(_):
+        raise httpx.ConnectError("synthetic local outage")
+
+    monkeypatch.setattr("src.tender.api.embedding_vectors", unavailable)
+    result = client.get("/api/tenders/TND-001/search?q=experience").json()
+    assert result["retrieval_mode"] == "bm25-fallback"
+    assert result["retrieval_degraded"] is True
+    assert result["matches"][0]["retrieval_method"] == "bm25"
+
+
+def test_embedding_endpoint_is_loopback_only_and_batched(monkeypatch):
+    monkeypatch.setenv("LLM_EMBEDDING_MODEL", "synthetic-embedding")
+    monkeypatch.setenv("LLM_EMBEDDING_BASE_URL", "https://example.test")
+    with pytest.raises(ValueError, match="loopback"):
+        embedding_vectors(["evidence"])
+
+    monkeypatch.setenv("LLM_EMBEDDING_BASE_URL", "http://127.0.0.1:11434")
+
+    def handler(request):
+        body = json.loads(request.content)
+        return httpx.Response(200, json={"embeddings": [[1.0, 0.0] for _ in body["input"]]})
+
+    values = embedding_vectors([str(number) for number in range(33)], httpx.MockTransport(handler))
+    assert len(values) == 33
+
+
+def test_unexpected_api_failure_is_safe_json(client, policy, monkeypatch):
+    seed_bid(client, policy)
+    monkeypatch.setenv("APP_ENV", "production")
+
+    def broken_scanner(_):
+        raise RuntimeError("synthetic scanner failure")
+
+    client.app.state.malware_scanner = broken_scanner
+    client._transport.raise_server_exceptions = False
+    try:
+        response = client.post(
+            "/api/tenders/TND-001/documents",
+            files={"file": ("bid.pdf", pdf_bytes(), "application/pdf")},
+        )
+    finally:
+        client._transport.raise_server_exceptions = True
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("application/json")
+    assert "synthetic scanner failure" not in response.text
 
 
 @pytest.mark.parametrize("bad", ["NaN", "Infinity", "-1"])

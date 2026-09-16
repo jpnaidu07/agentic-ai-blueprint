@@ -1,6 +1,7 @@
 """Loopback-only developer control plane. Run one process; never publish this API."""
 
 import argparse
+import logging
 import os
 import secrets
 from contextlib import asynccontextmanager
@@ -33,6 +34,8 @@ from src.workbench.providers import PROVIDERS, Providers
 from src.workbench.runtime import Runtime
 from src.workbench.security import Sessions, WorkbenchError, local_path
 from src.workbench.system import inspect_system
+
+logger = logging.getLogger("blueprint.workbench")
 
 
 class RequestLimit:
@@ -173,6 +176,20 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
     async def yaml_error(request, exc):
         return JSONResponse({"detail": "Invalid YAML. No parsed input is echoed."}, 422)
 
+    @app.exception_handler(Exception)
+    async def unexpected_error(request, exc):
+        # Keep every API failure machine-readable without reflecting exception text,
+        # provider responses, local paths, or credentials into the browser.
+        error_id = secrets.token_hex(6)
+        logger.error("Unhandled workbench error id=%s type=%s", error_id, type(exc).__name__)
+        return JSONResponse(
+            {
+                "detail": "The workbench encountered an unexpected internal error. "
+                f"Reference {error_id}, review the local server terminal, then retry."
+            },
+            500,
+        )
+
     def authenticated(request: Request):
         return sessions.require(request)
 
@@ -214,10 +231,9 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
 
     @app.delete("/api/session")
     def logout(request: Request, session=Depends(authenticated)):
-        jobs.cancelled.set()
         sessions.clear(request)
         return {
-            "message": "Session disconnected. Any in-flight provider call releases its key when it finishes."
+            "message": "Session disconnected. Any operation already running continues to its safe completion; reconnect to inspect or cancel it."
         }
 
     @app.get("/api/system", dependencies=[Depends(authenticated)])
@@ -328,9 +344,8 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
     @app.delete("/api/connection")
     def disconnect(session=Depends(authenticated)):
         session.connection = None
-        jobs.cancelled.set()
         return {
-            "message": "Model disconnected. A running call, if any, will finish/cancel at its next safe boundary."
+            "message": "Model disconnected. Any operation already running keeps its private connection copy until it finishes; new operations require reconnecting."
         }
 
     def catalog():
@@ -505,7 +520,13 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
         workspace = body.action in {"install-ollama", "start-ollama", "pull-model", "build-runner"}
         if body.action in {"launch-generated", "stop-app"} and not body.solution:
             raise WorkbenchError("Select an application before running this action.")
-        target = None if workspace else body.solution or "government-tender-processing"
+        target = (
+            None
+            if workspace
+            else "government-tender-processing"
+            if body.action == "launch-tender"
+            else body.solution
+        )
         return jobs.start(
             "setup" if workspace else "application",
             target,
@@ -528,10 +549,16 @@ def create_app(root=None, token=None, port=8080, providers=None, runtime_factory
 
     @app.post("/api/apps/{name}/credentials", dependencies=[Depends(authenticated)])
     def credentials(name: str):
-        if name != "government-tender-processing" or name not in runtime.apps:
+        managed = runtime.apps.get(name)
+        if (
+            name != "government-tender-processing"
+            or not managed
+            or not runtime.running(managed)
+            or "tokens" not in managed
+        ):
             raise HTTPException(404, "No local role tokens for this app")
         return {
-            "tokens": runtime.apps[name]["tokens"],
+            "tokens": managed["tokens"],
             "warning": "Development identities for synthetic documents only. Keep roles separate; an evaluator cannot approve their own work.",
         }
 

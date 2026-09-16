@@ -1,6 +1,7 @@
 """Single-writer jobs with durable progress; API keys never enter the job database."""
 
 import json
+import logging
 import sqlite3
 import threading
 import uuid
@@ -9,6 +10,8 @@ from datetime import datetime, timezone
 
 from src.agent.llm_client import LLMError
 from src.workbench.security import WorkbenchError, no_secrets
+
+logger = logging.getLogger("blueprint.workbench.jobs")
 
 
 class Jobs:
@@ -113,11 +116,20 @@ class Jobs:
                     "cancelled" if self.cancelled.is_set() else "blocked",
                     {"message": str(exc)},
                 )
-            except Exception:
+            except Exception as exc:
+                error_id = uuid.uuid4().hex[:12]
+                logger.error(
+                    "Unhandled background job error id=%s job=%s type=%s",
+                    error_id,
+                    job_id,
+                    type(exc).__name__,
+                )
                 state, result = (
                     "failed",
                     {
-                        "message": "Operation failed safely. Check model/schema compatibility, current specs and local prerequisites; no provider response or credentials were logged."
+                        "message": "Operation failed safely. "
+                        f"Reference {error_id}; check the local server terminal, model/schema compatibility, current specs and prerequisites. "
+                        "No provider response or credentials were recorded."
                     },
                 )
             finally:

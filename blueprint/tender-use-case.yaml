@@ -67,12 +67,13 @@ requirements:
       - Reusing the key after evidence changes returns a conflict.
       - A reviewer cannot approve incomplete or stale evidence; approval freezes the reference evaluation.
   - id: CAP-SEARCH
-    objective: Retrieve tender-scoped page evidence using lexical search and expose a hybrid retrieval extension.
+    objective: Retrieve tender-scoped page evidence using bounded lexical search and approved local embeddings, with explicit degraded fallback.
     skill: rag
     depends_on: [CAP-INGEST]
     acceptance:
       - Unknown queries return insufficient evidence without invented answers.
       - Search results contain document, page, section, bidder and tender identifiers.
+      - Local embedding failure is visible and falls back to bounded lexical retrieval without failing the workflow.
       - Structured bidder counts and rankings come from SQL and scoring snapshots, not vector similarity.
   - id: CAP-PORTAL
     objective: Provide an accessible portfolio and tender dashboard with evidence review, scores, risk flags and audit history.

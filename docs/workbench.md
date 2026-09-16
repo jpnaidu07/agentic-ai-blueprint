@@ -235,15 +235,19 @@ Reveal/copy the appropriate development role token and sign in to the portal:
 4. Run deterministic evaluation. Missing or uncertain evidence blocks ranking.
 5. Use **Ask & discover** for bidder inventory, top ranks, L1, missing evidence,
    approval state or cited excerpts. No generated SQL is executed. This reference's
-   free-text fallback returns source excerpts, not synthesized LLM conclusions.
+   free-text path returns source excerpts, not synthesized LLM conclusions. With an
+   approved local embedding model it uses bounded hybrid retrieval; a local embedding
+   outage is reported and falls back visibly to lexical search.
 6. Sign in as the separate reviewer to approve/reject the evaluation. Approval is
    not an automatic procurement award. Inspect the audit trail and evidence.
 
 Tender data persists across launches; local tokens rotate. Do not use confidential
 documents before production identity, malware isolation, encryption, retention,
-procurement rules and independent review are complete. Document-to-model extraction
-remains an explicitly configured separate opt-in in the original API deployment;
-the workbench launch does not silently enable it.
+procurement rules and independent review are complete. Launching through the
+workbench explicitly enables document proposal extraction and hybrid retrieval only
+against the solution's evaluated, approved local models. It does not transfer tender
+documents to the cloud helper. Direct API deployments must set `ALLOW_DOCUMENT_LLM`,
+model and embedding configuration explicitly.
 
 ## Local API and state
 
