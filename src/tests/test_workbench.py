@@ -674,6 +674,37 @@ def test_jobs_single_writer_cancellation_and_restart(tmp_path):
         conn.execute("UPDATE jobs SET state='running'")
     assert Jobs(tmp_path).get(job["id"])["state"] == "interrupted"
 
+    failed = jobs.start("test", None, lambda _: 1 / 0)
+    deadline = time.monotonic() + 3
+    while jobs.active and time.monotonic() < deadline:
+        time.sleep(0.01)
+    record = jobs.get(failed["id"])
+    assert record["state"] == "failed"
+    assert "Reference " in record["result"]["message"]
+
+
+def test_logout_does_not_cancel_workspace_job_owned_by_another_session(workbench):
+    client, _, _ = workbench
+    pair(client)
+    jobs = client.app.state.jobs
+    started, release = threading.Event(), threading.Event()
+
+    def work(_):
+        started.set()
+        release.wait(3)
+        jobs.check_cancelled()
+        return {"message": "completed"}
+
+    job = jobs.start("test", None, work)
+    assert started.wait(2)
+    assert client.delete("/api/session").status_code == 200
+    assert not jobs.cancelled.is_set()
+    release.set()
+    deadline = time.monotonic() + 3
+    while jobs.active and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert jobs.get(job["id"])["state"] == "succeeded"
+
 
 @pytest.mark.parametrize(
     "path",

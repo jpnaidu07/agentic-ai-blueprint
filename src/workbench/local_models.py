@@ -1,6 +1,7 @@
 """Solution-owned local model configuration, evaluation and lifecycle operations."""
 
 import json
+import math
 import statistics
 import time
 import uuid
@@ -169,14 +170,21 @@ class LocalModels:
                     }
                     payload["think"] = False
                 start = time.monotonic()
-                response = client.post(endpoint, json=payload)
-                response.raise_for_status()
-                data = response.json()
-                answer = (
-                    data["choices"][0]["message"]["content"]
-                    if trained
-                    else data["message"]["content"]
-                )
+                try:
+                    response = client.post(endpoint, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                    answer = (
+                        data["choices"][0]["message"]["content"]
+                        if trained
+                        else data["message"]["content"]
+                    )
+                    if not isinstance(answer, str):
+                        raise TypeError("Local model content must be text")
+                except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+                    raise WorkbenchError(
+                        "Local inference evaluation failed. Confirm the selected model is installed, its server is ready, and the configured context/output limits are supported."
+                    ) from None
                 no_secrets(answer)
                 rows.append(
                     {
@@ -191,13 +199,23 @@ class LocalModels:
                 )
             # A genuine embedding call verifies the configured model, never simulated vectors.
             self.jobs.event(job, f"Checking embedding model: {profile.embedding_model}")
-            embedded = client.post(
-                "http://127.0.0.1:11434/api/embed",
-                json={"model": profile.embedding_model, "input": [profile.evaluation[0].prompt]},
-            )
-            embedded.raise_for_status()
-            vector = embedded.json()["embeddings"][0]
-            if not vector or not all(isinstance(x, (float, int)) for x in vector):
+            try:
+                embedded = client.post(
+                    "http://127.0.0.1:11434/api/embed",
+                    json={
+                        "model": profile.embedding_model,
+                        "input": [profile.evaluation[0].prompt],
+                    },
+                )
+                embedded.raise_for_status()
+                vector = embedded.json()["embeddings"][0]
+            except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+                raise WorkbenchError(
+                    "Embedding evaluation failed. Confirm the embedding model is installed in the running Ollama instance."
+                ) from None
+            if not vector or not all(
+                isinstance(x, (float, int)) and math.isfinite(x) for x in vector
+            ):
                 raise WorkbenchError("Embedding model returned invalid vectors.")
         report = {
             "id": uuid.uuid4().hex,

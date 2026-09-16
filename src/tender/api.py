@@ -3,16 +3,19 @@
 import json
 import os
 import re
+import time
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from src.tender.documents import MAX_BYTES, chunks, parse_pdf, retrieve
+from src.tender.documents import MAX_BYTES, MAX_RETRIEVAL_CHUNKS, chunks, parse_pdf, retrieve
 from src.tender.models import (
     BidInput,
     DecisionInput,
@@ -37,6 +40,52 @@ from src.tender.store import (
 )
 
 router = APIRouter(prefix="/api/tenders", tags=["Tender intelligence"])
+MAX_QUERY_TIME_EMBEDDING_CHUNKS = 256
+
+
+def embedding_vectors(texts, transport=None):
+    """Call only an explicitly configured loopback Ollama embedding endpoint in bounded batches."""
+    base = os.getenv("LLM_EMBEDDING_BASE_URL", "").rstrip("/")
+    model = os.getenv("LLM_EMBEDDING_MODEL", "")
+    parsed = urlparse(base)
+    if (
+        not model
+        or parsed.scheme != "http"
+        or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("Embedding endpoint must be an explicit credential-free loopback URL")
+    vectors = []
+    deadline = time.monotonic() + 60
+    with httpx.Client(trust_env=False, transport=transport) as client:
+        for start in range(0, len(texts), 32):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise httpx.TimeoutException("Bounded local embedding budget exceeded")
+            response = client.post(
+                base + "/api/embed",
+                json={"model": model, "input": texts[start : start + 32]},
+                timeout=min(20, remaining),
+            )
+            response.raise_for_status()
+            batch = response.json().get("embeddings")
+            if not isinstance(batch, list) or len(batch) != len(texts[start : start + 32]):
+                raise ValueError("Embedding endpoint returned an invalid batch")
+            vectors.extend(batch)
+    return vectors
+
+
+def configured_embedder():
+    if (
+        os.getenv("ALLOW_DOCUMENT_LLM", "false").lower() == "true"
+        and os.getenv("LLM_EMBEDDING_MODEL")
+        and os.getenv("LLM_EMBEDDING_BASE_URL")
+    ):
+        return embedding_vectors
+    return None
 
 
 def store(request: Request) -> Store:
@@ -518,6 +567,7 @@ def decide(
 @router.get("/{tender_id}/search")
 def search(
     tender_id: str,
+    request: Request,
     q: str = Query(min_length=2, max_length=1000),
     bid_id: str | None = None,
     principal: Principal = Depends(authenticate),
@@ -537,11 +587,39 @@ def search(
                 {**chunk, "document_id": doc.id, "bid_id": doc.bid_id, "tender_id": tender_id}
                 for chunk in json.loads(doc.payload)["chunks"]
             ]
-        results = retrieve(q, records)
+        if len(records) > MAX_RETRIEVAL_CHUNKS:
+            raise HTTPException(
+                409,
+                "Search scope is too large for the reference runtime. Select a bidder or use a production vector index.",
+            )
+        embedder = configured_embedder()
+        degraded = False
+        warning = None
+        if embedder and len(records) > MAX_QUERY_TIME_EMBEDDING_CHUNKS:
+            embedder = None
+            degraded = True
+            warning = (
+                "Semantic retrieval was skipped because this query-time reference exceeds its 256-chunk embedding budget. "
+                "Select a bidder or deploy the production persistent vector index; bounded lexical retrieval was used."
+            )
+        try:
+            results = retrieve(q, records, embedder=embedder)
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            if not embedder:
+                raise
+            degraded = True
+            warning = (
+                "Local embedding retrieval failed; lexical evidence search was used. "
+                "Check Ollama and re-run before relying on semantic recall."
+            )
+            results = retrieve(q, records)
     return {
         "matches": results,
         "status": "EVIDENCE_FOUND" if results else "INSUFFICIENT_EVIDENCE",
         "generated_answer": None,
+        "retrieval_mode": "bm25-fallback" if degraded else "hybrid" if embedder else "bm25",
+        "retrieval_degraded": degraded,
+        "warning": warning,
     }
 
 
@@ -554,6 +632,7 @@ class TenderQuestion(BaseModel):
 def question(
     tender_id: str,
     body: TenderQuestion,
+    request: Request,
     principal: Principal = Depends(authenticate),
     db: Store = Depends(store),
 ):
@@ -630,7 +709,12 @@ def question(
             )
             response["rows"] = [row for row in ranked if row["rank"] <= limit]
         return response
-    evidence = search(tender_id, body.question, None, principal, db)
+    evidence = search(tender_id, request, body.question, None, principal, db)
+    response.update(
+        retrieval_mode=evidence["retrieval_mode"],
+        retrieval_degraded=evidence["retrieval_degraded"],
+        warning=evidence["warning"],
+    )
     response["answer"] = (
         "Retrieved source excerpts for your question. These are evidence, not an inferred procurement conclusion."
         if evidence["matches"]

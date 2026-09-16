@@ -10,6 +10,8 @@ from pypdf import PdfReader
 
 MAX_BYTES = 10 * 1024 * 1024
 MAX_PAGES = 250
+MAX_EXTRACTED_CHARS = 2_000_000
+MAX_RETRIEVAL_CHUNKS = 2_000
 
 
 def parse_pdf(data: bytes, scanner=None):
@@ -36,12 +38,16 @@ def parse_pdf(data: bytes, scanner=None):
         if not 0 < len(reader.pages) <= MAX_PAGES:
             raise ValueError("PDF must contain 1–250 pages")
         pages = []
+        extracted_chars = 0
         for number, page in enumerate(reader.pages, 1):
             if "/AA" in page or "/Annots" in page:
                 raise ValueError("Annotated/interactive PDFs require flattening before upload")
             text = page.extract_text(extraction_mode="layout").strip()
             if len(text) > 100_000:
                 raise ValueError("PDF page exceeds extraction limit")
+            extracted_chars += len(text)
+            if extracted_chars > MAX_EXTRACTED_CHARS:
+                raise ValueError("PDF extracted text exceeds the 2,000,000 character limit")
             pages.append({"page": number, "text": text})
         if not any(p["text"] for p in pages):
             raise ValueError(
@@ -79,18 +85,21 @@ def tokens(text):
     return re.findall(r"\w+", text.casefold())
 
 
-def retrieve(query, records, top_k=5, embedder=None):
+def retrieve(query, records, top_k=5, embedder=None, semantic_min_score=0.35):
     """BM25; optional supplied embeddings use reciprocal-rank fusion, never fake semantics."""
     if not records:
         return []
+    if len(records) > MAX_RETRIEVAL_CHUNKS:
+        raise ValueError("Retrieval scope exceeds the bounded chunk limit")
     query_tokens = set(tokens(query))
     docs = [Counter(tokens(r["text"])) for r in records]
     avg = sum(sum(d.values()) for d in docs) / len(docs) or 1
+    document_frequency = {term: sum(term in doc for doc in docs) for term in query_tokens}
     scored = []
     for index, doc in enumerate(docs):
         score = 0.0
         for term in query_tokens:
-            df = sum(term in other for other in docs)
+            df = document_frequency[term]
             freq = doc[term]
             idf = math.log(1 + (len(docs) - df + 0.5) / (df + 0.5))
             score += idf * freq * 2.5 / (freq + 1.5 * (0.25 + 0.75 * sum(doc.values()) / avg))
@@ -99,7 +108,15 @@ def retrieve(query, records, top_k=5, embedder=None):
     scored.sort(key=lambda pair: pair[1], reverse=True)
     if embedder:
         vectors = embedder([query, *[r["text"] for r in records]])
-        if len(vectors) != len(records) + 1 or any(len(v) != len(vectors[0]) for v in vectors):
+        if (
+            len(vectors) != len(records) + 1
+            or not vectors[0]
+            or any(len(v) != len(vectors[0]) for v in vectors)
+            or any(
+                not all(isinstance(x, (float, int)) and math.isfinite(x) for x in v)
+                for v in vectors
+            )
+        ):
             raise ValueError("Embedding provider returned inconsistent dimensions")
 
         def cosine(a, b):
@@ -114,7 +131,7 @@ def retrieve(query, records, top_k=5, embedder=None):
         fused = {}
         for ranking in (scored, semantic):
             for rank, (index, score) in enumerate(ranking, 1):
-                if score > 0:
+                if score >= (semantic_min_score if ranking is semantic else 0):
                     fused[index] = fused.get(index, 0) + 1 / (60 + rank)
         scored = sorted(fused.items(), key=lambda p: p[1], reverse=True)
     return [

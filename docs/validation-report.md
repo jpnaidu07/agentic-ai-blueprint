@@ -117,10 +117,10 @@ payload limits, absent source mounts and blocked generated-app egress.
 ## Initial reference validation
 
 - Ruff lint passed; Ruff formatting check passed.
-- Pytest: **58 passed** in 8.05 seconds. One warning originates in FastAPI's TestClient compatibility import.
+- Pytest: **122 passed, 2 Docker-only tests skipped locally**. One warning originates in FastAPI's TestClient compatibility import.
 - Offline evaluation: **10/10** synthetic retrieval/scoring cases passed. No live model quality or cloud cost was measured.
 - `pip-audit` found no known vulnerabilities in pinned runtime dependencies at scan time.
-- JavaScript and PowerShell syntax checks passed.
+- JavaScript syntax and **7 browser-session tests** passed. PowerShell syntax checks passed.
 - Root Compose YAML passed the official Compose Specification JSON Schema (static check).
 - Mermaid 11 parsed all **8** `.mmd` diagrams in a browser without console errors.
 - The generated SVG loaded with its accessible title/description and 53 text nodes; visual inspection found readable numbering, spacing and flow.
@@ -139,7 +139,7 @@ evidence, version freezing and audit-chain verification.
 
 - Docker is absent, so image build, Compose runtime, PostgreSQL, health checks and
   configured memory limits were not run locally. The prior
-  [CI run](https://github.com/jpnaidu07/agentic-ai-blueprint/actions/runs/33316926101)
+  [CI run](https://github.com/jpnaidu07/agentic-ai-blueprint/actions/runs/34361923679)
   passed; CI repeats the image build, startup and health check for each push.
 - SQLite tests cannot prove PostgreSQL isolation, migrations, failover or recovery.
 - No live model/embedding request, extraction quality, cost, billing, latency or

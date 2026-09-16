@@ -190,7 +190,7 @@ proves the framework against a document-heavy, controlled workflow:
 - authenticated admin, evaluator, reviewer and viewer roles with tender scope;
 - bounded digital-PDF validation, page text, chunks and original SHA-256;
 - immutable human-reviewed facts with exact quotes and document/page references;
-- lexical evidence retrieval with a supplied-embedding hybrid extension;
+- lexical evidence retrieval plus approved local Ollama embeddings for bounded hybrid search, with a visible lexical fallback when embeddings fail;
 - mandatory eligibility, Decimal weighted scoring, L1 comparison and equal ties;
 - missing/low-confidence evidence blocks ranking; ineligible bids set no baseline;
 - idempotent, version-bound evaluations and independent stale-safe decisions;
